@@ -9,12 +9,14 @@ FLAGS = flags.FLAGS
 #name of flag | default | explanation
 flags.DEFINE_string("arch_config","./configs/scale.cfg","file where we are getting our architechture from")
 flags.DEFINE_string("network","./topologies/conv_nets/alexnet.csv","topology that we are reading")
+flags.DEFINE_bool('save', False, 'Save trace dump, default: false, options: [--save, --nosave]')
+flags.DEFINE_bool('sweep', False, 'Sweep for design space exploration, default: false, options: [--sweep, --nosweep]')
 
 
 class scale:
-    def __init__(self, sweep = False, save = False):
-        self.sweep = sweep
-        self.save_space = save
+    def __init__(self):
+        self.sweep = FLAGS.sweep
+        self.save_space = FLAGS.save
 
     def parse_config(self):
         general = 'general'
@@ -194,13 +196,13 @@ class scale:
                 self.run_once()
 
 def main(argv):
-    s = scale(save = False, sweep = False)
+    s = scale()
     s.run_scale()
 
 if __name__ == '__main__':
   app.run(main)
 '''
 if __name__ == "__main__":
-    s = scale(save = False, sweep = False)
+    s = scale()
     s.run_scale()
 '''
