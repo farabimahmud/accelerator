@@ -9,14 +9,15 @@ FLAGS = flags.FLAGS
 #name of flag | default | explanation
 flags.DEFINE_string("arch_config","./configs/scale.cfg","file where we are getting our architechture from")
 flags.DEFINE_string("network","./topologies/conv_nets/alexnet.csv","topology that we are reading")
-flags.DEFINE_bool('save', False, 'Save trace dump, default: false, options: [--save, --nosave]')
-flags.DEFINE_bool('sweep', False, 'Sweep for design space exploration, default: false, options: [--sweep, --nosweep]')
+flags.DEFINE_string('run_name', '', 'naming for this experiment run')
+flags.DEFINE_bool('dump', False, 'dump memory traces')
+flags.DEFINE_bool('sweep', False, 'Sweep for design space exploration')
 
 
 class scale:
     def __init__(self):
         self.sweep = FLAGS.sweep
-        self.save_space = FLAGS.save
+        self.dump = FLAGS.dump
 
     def parse_config(self):
         general = 'general'
@@ -30,7 +31,10 @@ class scale:
         config.read(config_filename)
 
         ## Read the run name
-        self.run_name = config.get(general, 'run_name')
+        if not FLAGS.run_name:
+            self.run_name = config.get(general, 'run_name')
+        else:
+            self.run_name = FLAGS.run_name
 
         ## Read the architecture_presets
         ## Array height min, max
@@ -167,7 +171,7 @@ class scale:
         cmd = "mv " + path +"/*dram* " + path +"/layer_wise"
         os.system(cmd)
 
-        if self.save_space == True:
+        if self.dump == False:
             cmd = "rm -rf " + path +"/layer_wise"
             os.system(cmd)
 
