@@ -10,7 +10,7 @@ def sram_train(
         filt_h = 3, filt_w = 3,
         num_channels = 3,
         strides = 1, num_filters = 8,
-        ofmap_base = 2000000, filt_base = 1000000, ifmap_base = 0
+        ofmap_base = 2000000, filt_base = 4000000, ifmap_base = 0
         ):
 
     # Dimensions of output feature map channel
@@ -43,8 +43,20 @@ def sram_train(
             ifmap_base = ifmap_base, ofmap_base = ofmap_base
             )
 
+    write_cycles = gen_filter_gradient_write_trace(
+            cycle = cycles,
+            dim_rows = dimension_rows,
+            dim_cols = dimension_cols,
+            filt_h = filt_h, filt_w = filt_w,
+            num_channels = num_channels,
+            num_filters = num_filters,
+            filter_gradent_base = filt_base,
+            conv_window_size = px_per_conv_window
+            )
+
     # TODO: change it after adding deconvolution
-    cycles = read_cycles
+    #print('Read cycles: ', read_cycles, ', Write cycles: ', write_cycles)
+    cycles = max(read_cycles, write_cycles)
 
     return cycles, util
 
@@ -272,3 +284,90 @@ def gen_read_trace(
 
     return (local_cycle + cycle), util_percentile
 # End of gen_read_trace
+
+def gen_filter_gradient_write_trace(
+        cycle = 0,
+        dim_rows = 4,
+        dim_cols = 4,
+        filt_h = 7, filt_w = 7,
+        num_channels = 3,
+        num_filters = 4,
+        filter_gradent_base = 4000000,
+        conv_window_size = 25
+        ):
+
+    # Layer specific variables
+    filter_size = filt_h * filt_w * num_channels
+
+    # Tracking variables
+    id_row = []             # List of filter map ID for each row
+    id_col = []             # List of filter ID for each row
+    base_addr_col = []      # Starting address of each output filter
+    remaining_px  = filter_size
+    remaining_filters = num_filters
+    active_row = min(dim_rows, filter_size)
+    active_col = min(dim_cols, num_filters)
+    local_cycle = 0
+    sticky_flag = False     # This flag is in place to fix the OFMAP cycle shaving bug
+
+    for r in range(active_row):
+        id_row.append(r)
+
+    for c in range(active_col):
+        id_col.append(c)
+
+        base_col = c * filter_size
+        base_addr_col.append(base_col)
+
+    # This is the cycle when all the filter weights in the first col become available
+    local_cycle = conv_window_size + active_row - 1 # FIXME
+
+    while remaining_px > 0 or remaining_filters > 0:
+
+        active_row = min(dim_rows, remaining_px)
+
+        for r in range(active_row):
+            local_px = id_row[r]
+            remaining_px -= 1
+            id_row[r] += active_row     # Taking care of horizontal fold
+
+            for c in range(active_col):
+                addr = filter_gradent_base + base_addr_col[c] + local_px * num_channels
+
+        # Take care of the vertical fold
+        if remaining_px == 0:
+            remaining_filters -= active_col
+
+            # In case of vertical fold we have to track when the output of (0,0) is generated
+            # Shifting back local cycles to capture the last OFMAP generation in (0,0) for this fold
+            last_fold_cycle = local_cycle + active_row
+            local_cycle -= (active_row + active_col - 1)
+            sticky_flag = True
+
+            # There are more Filters to go
+            if remaining_filters > 0:
+                remaining_px = filter_size
+                last_active_col = active_col
+                active_col = min(remaining_filters, dim_cols)
+
+                # Re-assign col base addresses
+                for c in range(active_col):
+                    base_addr_col[c] += last_active_col * filter_size
+
+                active_row = min(dim_rows, remaining_px)
+                # Re-assign row base addresses
+                for r in range(active_row):
+                    id_row[r] = r
+
+                local_cycle += conv_window_size + active_row # FIXME
+                if local_cycle < last_fold_cycle:
+                    local_cycle = last_fold_cycle
+
+            else:   # Restore the local cycle to return to them main function
+                local_cycle = last_fold_cycle
+
+        else:   # If this is not a vertical fold then it is business as usual
+            local_cycle += max(conv_window_size, active_row)
+
+    return local_cycle + cycle
+# gen_filter_gradient_write_trace() end

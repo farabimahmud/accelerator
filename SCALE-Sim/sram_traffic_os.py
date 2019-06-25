@@ -361,7 +361,7 @@ def gen_write_trace(
     outfile = open(sram_write_trace_file,"w")
 
     #This is the cycle when all the OFMAP elements in the first col become available
-    local_cycle = r2c + active_col - 1
+    local_cycle = r2c + active_col - 1 # Jiayi: FIXME: r2c + active_row - 1?
 
     while (remaining_px > 0) or (remaining_filt > 0):
 
