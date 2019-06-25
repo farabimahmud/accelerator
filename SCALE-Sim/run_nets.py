@@ -1,6 +1,8 @@
 import trace_gen_wrapper as tg
+import backpropagation as backprop
 import os
 import subprocess
+from file_read_backwards import FileReadBackwards
 
 
 def run_net( ifmap_sram_size=1,
@@ -47,18 +49,24 @@ def run_net( ifmap_sram_size=1,
 
 
     first = True
-    
+    num_layers = 0
+    total_cycles = 0
+
+    print("\nFeed-Forward ...")
+
     for row in param_file:
         if first:
             first = False
             continue
-            
+
         elems = row.strip().split(',')
         #print(len(elems))
         
         # Do not continue if incomplete line
         if len(elems) < 9:
             continue
+
+        num_layers += 1
 
         name = elems[0]
         print("")
@@ -108,6 +116,8 @@ def run_net( ifmap_sram_size=1,
                                 dram_ofmap_trace_file= net_name + "_" + name + "_dram_ofmap_write.csv"
                             )
 
+        total_cycles += int(clk)
+
         bw_log += bw_str
         bw.write(bw_log + "\n")
 
@@ -133,10 +143,69 @@ def run_net( ifmap_sram_size=1,
         line = name + ",\t" + clk +",\t" + util_str +",\n"
         cycl.write(line)
 
+    E_h = (ifmap_h - filt_h + strides) / strides
+    E_w = (ifmap_w - filt_w + strides) / strides
+    print('\nDNN output dimension: [H: ', E_h, '] [W: ', E_w, '] [Ch: ', num_channels, ']')
+
+    print('\nBackward Propagation ...\n')
+
+    with FileReadBackwards(topology_file) as reversed_param_file:
+        for row in reversed_param_file:
+            if num_layers > 0:
+
+                elems = row.strip().split(',')
+                #print(len(elems))
+
+                # Do not continue if incomplete line
+                if len(elems) < 9:
+                    continue
+
+                num_layers -= 1
+
+                name = elems[0]
+                print("")
+                print("Commencing back-propagation run for " + name)
+
+                ifmap_h = int(elems[1])
+                ifmap_w = int(elems[2])
+
+                filt_h = int(elems[3])
+                filt_w = int(elems[4])
+
+                num_channels = int(elems[5])
+                num_filters = int(elems[6])
+
+                strides = int(elems[7])
+
+                ifmap_base  = offset_list[0]
+                filter_base = offset_list[1]
+                ofmap_base  = offset_list[2]
+
+                cycles, util = backprop.backprop(
+                        array_h = array_h,
+                        array_w = array_w,
+                        ifmap_h = ifmap_h, ifmap_w = ifmap_w,
+                        filt_h = filt_h, filt_w = filt_w,
+                        num_channels = num_channels,
+                        strides = strides,
+                        num_filt = num_filters,
+                        word_size_bytes = 1,
+                        filter_sram_size = filter_sram_size,
+                        ifmap_sram_size = ifmap_sram_size,
+                        ofmap_sram_size = ofmap_sram_size,
+                        filt_base = filter_base,
+                        ifmap_base = ifmap_base,
+                        ofmap_base = ofmap_base
+                        )
+
+                total_cycles += cycles
+
     bw.close()
     maxbw.close()
     cycl.close()
     param_file.close()
+
+    print('\nTotal cycles : ', total_cycles, '\n')
 
 #if __name__ == "__main__":
 #    sweep_parameter_space_fast()    

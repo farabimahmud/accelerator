@@ -30,8 +30,8 @@ def sram_traffic(
     e2m = num_ofmap_px
     
     # Variables to calculate folds in runtime
-    num_h_fold = math.ceil(e2/dimension_rows)
-    num_v_fold = math.ceil(num_filt/dimension_cols)
+    num_h_fold = math.ceil(e2/dimension_rows) # Jiayi: Each row for one element of ofmap (of a set of filters)
+    num_v_fold = math.ceil(num_filt/dimension_cols) # Jiayi: Each column for one filter/ofmap channel
 
     cycles = 0
 
@@ -83,8 +83,8 @@ def gen_read_trace(
         #sram_write_trace_file = "sram_write.csv"
 ):
     # Layer specific variables
-    r2c = filt_h * filt_w * num_channels
-    rc = filt_w * num_channels
+    r2c = filt_h * filt_w * num_channels # Jiayi: for one element of ofmap
+    rc = filt_w * num_channels # Jiayi: for address calculation
     hc = ifmap_w * num_channels
     e2 = ofmap_h * ofmap_w
     #num_ofmap_px = e2 * num_filters
@@ -115,6 +115,8 @@ def gen_read_trace(
     # This initialization assumes num_rows << num_ofmap_px
     # The assignment logic needs to be modified if that is not the case
     for r in range(dim_rows):
+        # Jiayi: calculate base_addr of ifmap for a particular ofmap element
+        #        (initially, r = ofmap_row_idx * ofmap_w + ofmap_col_idx)
         base_row_id = math.floor(r / ofmap_w) * stride
         base_col_id = r % ofmap_w * stride
         base_addr  = base_row_id * hc + base_col_id * num_channels 
@@ -131,13 +133,13 @@ def gen_read_trace(
         v_fold_barrier.append(False)
 
     for c in range(dim_cols):
-        base_addr = c * r2c
+        base_addr = c * r2c # Jiayi: one column for one filter kernel
 
         # Anand: TODO
         if c < remaining_filt:
             clk_offset = c * -1
             lane_done.append(False)
-        else:
+        else: # In case num_filters < dim_cols
             clk_offset = neg_inf
             lane_done.append(True)
 
@@ -186,7 +188,7 @@ def gen_read_trace(
 
             if (row_clk_offset[r] > 0) and (row_clk_offset[r] % r2c == 0):   #Completed MAC for one OFMAP px
                 
-                row_ofmap_idx[r] += dim_rows
+                row_ofmap_idx[r] += dim_rows # Jiayi: reinitialize to compute for next waiting OFMAP px
                 ofmap_idx = row_ofmap_idx[r]
 
                 # Update progress bar
@@ -201,6 +203,8 @@ def gen_read_trace(
                     row_base_addr[r] = base_addr
 
                 else:
+                    # Jiayi: this else block reinitialize for next group (col_dim) of OFMAP channels/filter maps
+
                     v_fold_row[r] += 1
                     #pbar.update(e2)
 
@@ -213,6 +217,7 @@ def gen_read_trace(
                         row_base_addr[r]  = base_addr
 
                         # Stall this col from proceeding until all the rows reach the v_fold boundary
+                        # XXX: Jiayi: v_fold_row[r] > v_fold_row[r-1] when (r-1) execute 1 more OFMAP elements than r
                         if (r != 0) and ((v_fold_row[r] > v_fold_row[r-1]) or (v_fold_barrier[r-1] == True)):
                             row_clk_offset[r] = neg_inf
                             v_fold_barrier[r] = True
@@ -227,6 +232,7 @@ def gen_read_trace(
         #            in a given clock cycle insertion for all rows strictly happen before the release.
         #            The flag ensures only one col is released per cycle
         # Since indx 0 never enters the barrier, this should work fine
+        # XXX: Jiayi: can use break to optimize simulation time
         flag = False
         for r in range(dim_rows):
             if v_fold_barrier[r] and flag==False:
@@ -246,7 +252,7 @@ def gen_read_trace(
             if(col_clk_offset[c] >= 0):     # Take care of the skew
                 inc = col_clk_offset[c]
                 
-                filt_addr = col_base_addr[c] + inc + filt_base 
+                filt_addr = col_base_addr[c] + inc + filt_base
                 filt_read += str(filt_addr) + ", "
                 cols_used += 1
             else:
@@ -304,6 +310,10 @@ def gen_read_trace(
     outfile.close()
     #ofmap_out.close()
 
+    #calculated_macs = util * dim_rows * dim_cols
+    #macs = ofmap_h * ofmap_w * num_filters * (filt_h * filt_w * num_channels)
+    #accuracy = calculated_macs / macs * 100
+    #print('total number of computes: ', calculated_macs, ' (should be: ', macs, ', accuracy: ', accuracy,'%)')
     util_perc = (util / local_cycle) * 100
 
     return (local_cycle + cycle), util_perc
