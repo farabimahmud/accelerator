@@ -22,7 +22,8 @@ def sram_train(
     ofmap_channels = num_filters
 
     # Number of pixels in one convolution window
-    px_per_conv_window = ofmap_h * ofmap_w
+    input_gradient_px_per_conv_window = filt_h * filt_w
+    filter_gradient_px_per_conv_window = ofmap_h * ofmap_w
 
     # Total number of filter weights across all channels
     filter_size = filt_h * filt_w * num_channels
@@ -51,6 +52,18 @@ def sram_train(
             ofmap_gradient_base = ofmap_gradient_base, filter_base = filter_base
             )
 
+    input_grad_write_cycles = gen_input_gradient_write_trace(
+            cycle = cycles,
+            dim_rows = dimension_rows,
+            dim_cols = dimension_cols,
+            ifmap_h = ifmap_h, ifmap_w = ifmap_w,
+            num_channels = num_channels,
+            num_filters = num_filters,
+            ifmap_gradient_base = ifmap_gradient_base,
+            conv_window_size = input_gradient_px_per_conv_window
+            )
+    print(' -- input-gradient: read cycles: ', input_grad_read_cycles, ', write cycles: ', input_grad_write_cycles)
+
     print(' - compute filter-gradient:')
     filter_grad_read_cycles, filter_grad_util = gen_filter_gradient_read_trace(
             cycle = cycles,
@@ -73,12 +86,12 @@ def sram_train(
             num_channels = num_channels,
             num_filters = num_filters,
             filter_gradient_base = filter_gradient_base,
-            conv_window_size = px_per_conv_window
+            conv_window_size = filter_gradient_px_per_conv_window
             )
+    print(' -- filter-gradient: read cycles: ', filter_grad_read_cycles, ', write cycles: ', filter_grad_write_cycles)
 
     # TODO: change it after adding deconvolution
-    #print('Read cycles: ', read_cycles, ', Write cycles: ', write_cycles)
-    input_grad_cycles = input_grad_read_cycles
+    input_grad_cycles = max(input_grad_read_cycles, input_grad_write_cycles)
     filter_grad_cycles = max(filter_grad_read_cycles, filter_grad_write_cycles)
     cycles = input_grad_cycles + filter_grad_cycles
     print(' - input-gradient-cycles: ', input_grad_read_cycles, ', uitl: ', input_grad_util, '%')
@@ -317,7 +330,7 @@ def gen_filter_gradient_write_trace(
         cycle = 0,
         dim_rows = 4,
         dim_cols = 4,
-        filt_h = 7, filt_w = 7,
+        filt_h = 3, filt_w = 3,
         num_channels = 3,
         num_filters = 4,
         filter_gradient_base = 10000000,
@@ -661,6 +674,89 @@ def gen_input_gradient_read_trace(
     return (local_cycle + cycle), util_percentile
 # gen_input_gradient_read_trace() end
 
-def gen_input_gradient_write_trace():
-    print('')
+def gen_input_gradient_write_trace(
+        cycle = 0,
+        dim_rows = 4,
+        dim_cols = 4,
+        ifmap_h = 7, ifmap_w = 7,
+        num_channels = 3,
+        num_filters = 4,
+        ifmap_gradient_base = 6000000,
+        conv_window_size = 9
+        ):
+
+    # Layer specific variables
+    ifmap_size_per_channel = ifmap_h * ifmap_w
+
+    # Tracking variables
+    id_row = []             # List of IFMAP ID for each row
+    id_col = []             # List of channel ID for each row
+    base_addr_col = []      # Starting address of each input channel
+    remaining_px  = ifmap_size_per_channel
+    remaining_channels = num_channels
+    active_row = min(dim_rows, ifmap_size_per_channel)
+    active_col = min(dim_cols, num_channels)
+    local_cycle = 0
+    sticky_flag = False     # This flag is in place to fix the OFMAP cycle shaving bug
+
+    for r in range(active_row):
+        id_row.append(r)
+
+    for c in range(active_col):
+        id_col.append(c)
+
+        base_col = c
+        base_addr_col.append(base_col)
+
+    # This is the cycle when all the filter weights in the first col become available
+    local_cycle = conv_window_size + active_row - 1 # FIXME
+
+    while remaining_px > 0 or remaining_channels > 0:
+
+        active_row = min(dim_rows, remaining_px)
+
+        for r in range(active_row):
+            local_px = id_row[r]
+            remaining_px -= 1
+            id_row[r] += active_row     # Taking care of horizontal fold
+
+            for c in range(active_col):
+                addr = ifmap_gradient_base + base_addr_col[c] + local_px * num_channels
+
+        # Take care of the vertical fold
+        if remaining_px == 0:
+            remaining_channels -= active_col
+
+            # In case of vertical fold we have to track when the output of (0,0) is generated
+            # Shifting back local cycles to capture the last OFMAP generation in (0,0) for this fold
+            last_fold_cycle = local_cycle + active_row
+            local_cycle -= (active_row + active_col - 1)
+            sticky_flag = True
+
+            # There are more Filters to go
+            if remaining_channels > 0:
+                remaining_px = ifmap_size_per_channel
+                last_active_col = active_col
+                active_col = min(remaining_channels, dim_cols)
+
+                # Re-assign col base addresses
+                for c in range(active_col):
+                    base_addr_col[c] += last_active_col
+
+                active_row = min(dim_rows, remaining_px)
+                # Re-assign row base addresses
+                for r in range(active_row):
+                    id_row[r] = r
+
+                local_cycle += conv_window_size + active_row # FIXME
+                if local_cycle < last_fold_cycle:
+                    local_cycle = last_fold_cycle
+
+            else:   # Restore the local cycle to return to them main function
+                local_cycle = last_fold_cycle
+
+        else:   # If this is not a vertical fold then it is business as usual
+            local_cycle += max(conv_window_size, active_row)
+
+    return local_cycle + cycle
 # gen_input_gradient_write_trace()
