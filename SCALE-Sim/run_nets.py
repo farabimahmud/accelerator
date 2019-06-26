@@ -147,7 +147,7 @@ def run_net( ifmap_sram_size=1,
     E_w = (ifmap_w - filt_w + strides) / strides
     print('\nDNN output dimension: [H: ', E_h, '] [W: ', E_w, '] [Ch: ', num_channels, ']')
 
-    print('\nBackward Propagation ...\n')
+    print('\nBackward Propagation ...')
 
     with FileReadBackwards(topology_file) as reversed_param_file:
         for row in reversed_param_file:
@@ -193,9 +193,11 @@ def run_net( ifmap_sram_size=1,
                         filter_sram_size = filter_sram_size,
                         ifmap_sram_size = ifmap_sram_size,
                         ofmap_sram_size = ofmap_sram_size,
-                        filt_base = filter_base,
+                        filter_base = filter_base,
                         ifmap_base = ifmap_base,
-                        ofmap_base = ofmap_base
+                        ifmap_gradient_base = 6000000,
+                        ofmap_gradient_base = 8000000,
+                        filter_gradient_base = 10000000
                         )
 
                 total_cycles += cycles

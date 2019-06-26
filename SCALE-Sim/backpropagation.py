@@ -15,7 +15,10 @@ def backprop(
         word_size_bytes = 1,
         filter_sram_size = 64, ifmap_sram_size = 64, ofmap_sram_size = 64,
 
-        filt_base = 1000000, ifmap_base = 0, ofmap_base = 2000000,
+        filter_base = 4000000, ifmap_base = 0,
+        ifmap_gradient_base = 6000000,
+        ofmap_gradient_base = 8000000,
+        filter_gradient_base = 10000000
         ):
 
     sram_cycles = 0
@@ -31,8 +34,10 @@ def backprop(
                     filt_h = filt_h, filt_w = filt_w,
                     num_channels = num_channels,
                     strides = strides, num_filters = num_filt,
-                    filt_base = filt_base, ifmap_base = ifmap_base,
-                    ofmap_base = ofmap_base,
+                    filter_base = filter_base, ifmap_base = ifmap_base,
+                    ifmap_gradient_base = ifmap_gradient_base,
+                    ofmap_gradient_base = ofmap_gradient_base,
+                    filter_gradient_base = filter_gradient_base
                     )
 
     print("Average utilization : \t" + str(util) + " %")
