@@ -80,6 +80,8 @@ void Flit::Reset()
   intm =-1;
   ph = -1;
   data = 0;
+  vnet = -1;
+  msg = nullptr;
 }  
 
 Flit * Flit::New() {
@@ -104,4 +106,8 @@ void Flit::FreeAll() {
     delete _all.top();
     _all.pop();
   }
+}
+
+int Flit::OutStanding() {
+  return _all.size() - _free.size();
 }

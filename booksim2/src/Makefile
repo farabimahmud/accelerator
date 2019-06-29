@@ -31,10 +31,13 @@ INCPATH = -I. -Iarbiters -Iallocators -Irouters -Inetworks -Ipower -Idsent
 CPPFLAGS += -Wall $(INCPATH) $(DEFINE)
 CPPFLAGS += -O3
 CPPFLAGS += -g
+CFLAGS += -g
+CPPFLAGS += -std=c++11
 LFLAGS +=
 
 OBJDIR := obj
 PROG := booksim
+LIB_BOOKSIM := libbooksim.so
 
 ########## DSENT ###########
 # Define the directories that will be compiled
@@ -73,6 +76,11 @@ CPP_HDRS = $(wildcard *.hpp) $(wildcard */*.hpp)
 CPP_DEPS = $(addprefix ${OBJDIR}/,$(notdir $(CPP_SRCS:.cpp=.d)))
 CPP_OBJS = $(addprefix ${OBJDIR}/,$(notdir $(CPP_SRCS:.cpp=.o)))
 
+LIB_CPP_SRCS = $(filter-out main.cpp,$(CPP_SRCS))
+LIB_CPP_HDRS = $(CPP_HDRS)
+LIB_CPP_DEPS = $(addprefix ${OBJDIR}/,$(notdir $(LIB_CPP_SRCS:.cpp=.d)))
+LIB_CPP_OBJS = $(addprefix ${OBJDIR}/,$(notdir $(LIB_CPP_SRCS:.cpp=.o)))
+
 LEX_SRCS = lex.yy.c
 LEX_OBJS = ${OBJDIR}/lex.yy.o
 
@@ -81,13 +89,18 @@ YACC_HDRS = y.tab.h
 YACC_OBJS = ${OBJDIR}/y.tab.o
 
 OBJS := $(DSENT_OBJS) $(CPP_OBJS) $(LEX_OBJS) $(YACC_OBJS)
+LIB_OBJS := $(DSENT_OBJS) $(LIB_CPP_OBJS) $(LEX_OBJS) $(YACC_OBJS)
 
 .PHONY: clean
 
 all: $(LIB_UTIL) $(PROG)
+lib: ${LIB_UTIL} $(LIB_BOOKSIM)
 
 $(PROG): $(OBJS) dsent/DSENT.o
 	 $(CXX) $(LFLAGS) $(LD_FLAGS) $^ -o $@ $(LD_LIBS)
+
+$(LIB_BOOKSIM): $(LIB_OBJS) dsent/DSENT.o
+	 $(CXX) $(LFLAGS) $(LD_FLAGS) -shared -Wl,-soname,$@ -o $@ $(LD_LIBS)
 
 $(LIB_UTIL):
 	$(MAKE) -C dsent/libutil
@@ -102,10 +115,10 @@ $(YACC_SRCS) $(YACC_HDRS): config.y
 	$(YACC) -d $<
 
 $(LEX_OBJS): $(LEX_SRCS) $(YACC_HDRS)
-	$(CC) $(CPPFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(YACC_OBJS): $(YACC_SRCS)
-	$(CC) $(CPPFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 .SECONDEXPANSION:
 
@@ -141,7 +154,10 @@ clean:
 	rm -f $(LEX_SRCS)
 	rm -f $(CPP_DEPS)
 	rm -f $(OBJS)
+	rm -f $(LIB_CPP_DEPS)
+	rm -f $(LIB_OBJS)
 	rm -f $(PROG)
+	rm -f $(LIB_BOOKSIM)
 	make clean -C dsent
 
 distclean: clean

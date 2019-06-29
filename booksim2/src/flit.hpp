@@ -33,17 +33,24 @@
 
 #include "booksim.hpp"
 #include "outputset.hpp"
+#include "message.hpp"
 
 class Flit {
 
 public:
 
-  const static int NUM_FLIT_TYPES = 5;
-  enum FlitType { READ_REQUEST  = 0, 
-		  READ_REPLY    = 1,
-		  WRITE_REQUEST = 2,
-		  WRITE_REPLY   = 3,
-                  ANY_TYPE      = 4 };
+  const static int NUM_FLIT_TYPES = 7;
+  enum FlitType {
+    READ_REQUEST  = 0, 
+    READ_REPLY    = 1,
+    WRITE_REQUEST = 2,
+    WRITE_REPLY   = 3,
+
+    // don't differentiate read/write
+    REQUEST       = 4,
+    REPLY         = 5,
+
+    ANY_TYPE      = 6 };
   FlitType type;
 
   int vc;
@@ -83,11 +90,15 @@ public:
   // Lookahead route info
   OutputSet la_route_set;
 
+  int vnet;
+  Message *msg;
+
   void Reset();
 
   static Flit * New();
   void Free();
   static void FreeAll();
+  static int OutStanding();
 
 private:
 
