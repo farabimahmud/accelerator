@@ -13,10 +13,6 @@ protected:
   vector<int> _last_vnet;
 
 private:
-  vector<vector<int> > _packet_size;
-  vector<vector<int> > _packet_size_rate;
-  vector<int> _packet_size_max_val;
-
   vector<vector<list<Message *> > > _input_buffer;
   vector<vector<list<Message *> > > _output_buffer;
 
