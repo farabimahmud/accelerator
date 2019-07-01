@@ -31,13 +31,14 @@ INCPATH = -I. -Iarbiters -Iallocators -Irouters -Inetworks -Ipower -Idsent
 CPPFLAGS += -Wall $(INCPATH) $(DEFINE)
 CPPFLAGS += -O3
 CPPFLAGS += -g
-CFLAGS += -g
+CFLAGS += -Wall -O3 -g
 CPPFLAGS += -std=c++11
 LFLAGS +=
 
 OBJDIR := obj
 PROG := booksim
 LIB_BOOKSIM := libbooksim.so
+STATIC_LIB_BOOKSIM := libbooksim.a
 
 ########## DSENT ###########
 # Define the directories that will be compiled
@@ -76,7 +77,8 @@ CPP_HDRS = $(wildcard *.hpp) $(wildcard */*.hpp)
 CPP_DEPS = $(addprefix ${OBJDIR}/,$(notdir $(CPP_SRCS:.cpp=.d)))
 CPP_OBJS = $(addprefix ${OBJDIR}/,$(notdir $(CPP_SRCS:.cpp=.o)))
 
-LIB_CPP_SRCS = $(filter-out main.cpp,$(CPP_SRCS))
+#LIB_CPP_SRCS = $(filter-out main.cpp,$(CPP_SRCS))
+LIB_CPP_SRCS = $(CPP_SRCS)
 LIB_CPP_HDRS = $(CPP_HDRS)
 LIB_CPP_DEPS = $(addprefix ${OBJDIR}/,$(notdir $(LIB_CPP_SRCS:.cpp=.d)))
 LIB_CPP_OBJS = $(addprefix ${OBJDIR}/,$(notdir $(LIB_CPP_SRCS:.cpp=.o)))
@@ -94,13 +96,29 @@ LIB_OBJS := $(DSENT_OBJS) $(LIB_CPP_OBJS) $(LEX_OBJS) $(YACC_OBJS)
 .PHONY: clean
 
 all: $(LIB_UTIL) $(PROG)
+
+# dynamic library
+lib: DEFINE += -DLIB_BOOKSIM
+lib: CPPFLAGS += -fPIC
+lib: CFLAGS += -fPIC
+lib: CXXFLAGS += -fPIC
 lib: ${LIB_UTIL} $(LIB_BOOKSIM)
+
+# static library
+staticlib: DEFINE += -DLIB_BOOKSIM
+staticlib: CPPFLAGS += -fPIC
+staticlib: CFLAGS += -fPIC
+staticlib: CXXFLAGS += -fPIC
+staticlib: ${LIB_UTIL} $(STATIC_LIB_BOOKSIM)
 
 $(PROG): $(OBJS) dsent/DSENT.o
 	 $(CXX) $(LFLAGS) $(LD_FLAGS) $^ -o $@ $(LD_LIBS)
 
 $(LIB_BOOKSIM): $(LIB_OBJS) dsent/DSENT.o
-	 $(CXX) $(LFLAGS) $(LD_FLAGS) -shared -Wl,-soname,$@ -o $@ $(LD_LIBS)
+	 $(CXX) $(LFLAGS) $(LD_FLAGS) -shared -Wl,-soname,$@ -o $@ $(LD_LIBS) $^
+
+$(STATIC_LIB_BOOKSIM): $(LIB_OBJS) dsent/DSENT.o
+	ar rcs $@ $^
 
 $(LIB_UTIL):
 	$(MAKE) -C dsent/libutil
@@ -158,6 +176,7 @@ clean:
 	rm -f $(LIB_OBJS)
 	rm -f $(PROG)
 	rm -f $(LIB_BOOKSIM)
+	rm -f $(STATIC_LIB_BOOKSIM)
 	make clean -C dsent
 
 distclean: clean

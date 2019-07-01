@@ -157,6 +157,7 @@ bool Simulate( BookSimConfig const & config )
 }
 
 
+#ifndef LIB_BOOKSIM
 int main( int argc, char **argv )
 {
 
@@ -191,3 +192,4 @@ int main( int argc, char **argv )
   bool result = Simulate( config );
   return result ? -1 : 0;
 }
+#endif
