@@ -4,10 +4,10 @@
 #include "scaletrafficmanager.hpp"
 
 ScaleTrafficManager::ScaleTrafficManager(const Configuration &config, const
-    vector<Network *> &net, int vnets)
+    vector<Network *> &net)
   : TrafficManager(config, net)
 {
-  _vnets = vnets;
+  _vnets = config.GetInt("vnets");
   _last_vnet.resize(_nodes, 0);
   _flit_size = config.GetInt("channel_width");
   _watch_all_pkts = (config.GetInt("watch_all_pkts") > 0);

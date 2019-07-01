@@ -25,7 +25,7 @@ protected:
   virtual void _GeneratePacket(int source, int stype, int vnet, int time);
 
 public:
-  ScaleTrafficManager(const Configuration &config, const vector<Network *> &net, int vnet);
+  ScaleTrafficManager(const Configuration &config, const vector<Network *> &net);
   ~ScaleTrafficManager();
 
   void Enqueue(int node, int vnet, Message *message);

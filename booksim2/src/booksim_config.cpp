@@ -47,6 +47,9 @@ BookSimConfig::BookSimConfig( )
   // Physical sub-networks
   _int_map["subnets"] = 1;
 
+  // Virtual networks
+  _int_map["vnets"] = 1;
+
   //==== Topology options =======================
   AddStrField( "topology", "torus" );
   _int_map["k"] = 8; //network radix
