@@ -511,5 +511,12 @@ void ScaleTrafficManager::Enqueue(int node, int vnet, Message *message)
 
 Message *ScaleTrafficManager::Dequeue(int node, int vnet)
 {
-  Message *message = _output_buffer[node][vnet].front();
+  Message *message = nullptr;
+
+  if (!_output_buffer[node][vnet].empty()) {
+    message = _output_buffer[node][vnet].front();
+    _output_buffer[node][vnet].pop_back();
+  }
+
+  return message;
 }
