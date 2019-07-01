@@ -503,3 +503,13 @@ void ScaleTrafficManager::_Step()
     cout << "TIME" << _time << endl;
   }
 }
+
+void ScaleTrafficManager::Enqueue(int node, int vnet, Message *message)
+{
+  _input_buffer[node][vnet].push_back(message);
+}
+
+Message *ScaleTrafficManager::Dequeue(int node, int vnet)
+{
+  Message *message = _output_buffer[node][vnet].front();
+}

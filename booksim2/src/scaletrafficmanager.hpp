@@ -27,6 +27,9 @@ protected:
 public:
   ScaleTrafficManager(const Configuration &config, const vector<Network *> &net, int vnet);
   ~ScaleTrafficManager();
+
+  void Enqueue(int node, int vnet, Message *message);
+  Message *Dequeue(int node, int vnet);
 };
 
 
