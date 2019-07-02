@@ -50,4 +50,7 @@ extern bool gTrace;
 
 extern std::ostream * gWatchOut;
 
+class BookSim;
+extern BookSim *gBookSim;
+
 #endif

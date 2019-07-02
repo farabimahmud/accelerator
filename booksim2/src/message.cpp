@@ -18,10 +18,10 @@ Message::Message()
   Reset();
 }
 
-void Message::Set(MessageType type_, int vnet_, int id_, int src_, int dest_)
+void Message::Set(MessageType type_, int id_, int src_, int dest_)
 {
   type = type_;
-  vnet = vnet_;
+  vnet = GetVirtualNetwork(type);
   id = id_;
   src = src_;
   dest = dest_;
@@ -51,7 +51,7 @@ Message * Message::New() {
   return m;
 }
 
-Message * Message::New(MessageType type, int vnet, int id, int src, int dest)
+Message * Message::New(MessageType type, int id, int src, int dest)
 {
   Message * m;
   if (_free.empty()) {
@@ -61,7 +61,7 @@ Message * Message::New(MessageType type, int vnet, int id, int src, int dest)
     m = _free.top();
     _free.pop();
   }
-  m->Set(type, vnet, id, src, dest);
+  m->Set(type, id, src, dest);
 
   return m;
 }
@@ -87,19 +87,32 @@ string Message::MessageTypeToString(const MessageType &type)
   }
 }
 
-int Message::GetMessageSize(const MessageType &type)
+int Message::GetVirtualNetwork(const MessageType &type)
 {
   switch (type) {
     case ReadRequest:
-      return 8;
+    case WriteRequest:
+    case ControlRequest:
+      return 0;
     case ReadReply:
-      return 64 + 8;
+    case WriteReply:
+    case ControlReply:
+      return 1;
+    default:
+      cerr << "Error: Unknown Message Type " << type << endl;
+      exit(-1);
+  }
+}
+
+int Message::GetMessageSize(const MessageType &type)
+{
+  switch (type) {
+    case ReadReply:
     case WriteRequest:
       return 64 + 8;
+    case ReadRequest:
     case WriteReply:
-      return 8;
     case ControlRequest:
-      return 8;
     case ControlReply:
       return 8;
     default:

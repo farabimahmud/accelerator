@@ -8,7 +8,7 @@ class ScaleTrafficManager : public TrafficManager {
 
 protected:
   int _flit_size;
-  bool _watch_all_pkts;
+  bool _watch_all_packets;
   int _vnets;
   vector<int> _last_vnet;
 
@@ -28,8 +28,11 @@ public:
   ScaleTrafficManager(const Configuration &config, const vector<Network *> &net);
   ~ScaleTrafficManager();
 
-  void Enqueue(int node, int vnet, Message *message);
+  void Enqueue(Message *message);
   Message *Dequeue(int node, int vnet);
+
+  inline void WakeUp() { _Step(); }
+  inline bool Idle() {return (!Flit::OutStanding() && !Credit::OutStanding());}
 };
 
 

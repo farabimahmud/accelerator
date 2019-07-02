@@ -10,7 +10,7 @@ ScaleTrafficManager::ScaleTrafficManager(const Configuration &config, const
   _vnets = config.GetInt("vnets");
   _last_vnet.resize(_nodes, 0);
   _flit_size = config.GetInt("channel_width");
-  _watch_all_pkts = (config.GetInt("watch_all_pkts") > 0);
+  _watch_all_packets = (config.GetInt("watch_all_packets") > 0);
 
   _sim_state = running;
 
@@ -56,7 +56,7 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
   bool record = true;
 
   bool watch = gWatchOut && (_packets_to_watch.count(_cur_pid) > 0);
-  watch |= _watch_all_pkts;
+  watch |= _watch_all_packets;
 
   switch (stype) {
     case Message::ReadRequest:
@@ -154,7 +154,7 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
 
     if (f->watch) {
       *gWatchOut << GetSimTime() << " | "
-        << "node " << source << " | "
+        << "node" << source << " | "
         << "Enqueuing flit " << f->id
         << " (packet " << f->pid
         << ") at time " << time
@@ -169,7 +169,7 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
 void ScaleTrafficManager::_Inject()
 {
   for (int input = 0; input < _nodes; input++) {
-    assert(_classes == 0);
+    assert(_classes == 1);
 
     int const last_vnet = _last_vnet[input];
 
@@ -181,7 +181,7 @@ void ScaleTrafficManager::_Inject()
         Message *message = _input_buffer[input][vnet].front();
         Message::MessageType packet_type = message->type;
         _GeneratePacket(input, packet_type, vnet, _time);
-        if (_watch_all_pkts) {
+        if (_watch_all_packets) {
           *gWatchOut << GetSimTime() << " | " << FullName()
             << " | " << "HMC-" << input
             << " generate new packets for message: " << endl;
@@ -379,9 +379,9 @@ void ScaleTrafficManager::_Step()
                 << "Selected output VC " << cf->vc
                 << " is full for flit " << cf->id
                 << "." << endl;
-            } else {
-              f = cf;
             }
+          } else {
+            f = cf;
           }
         }
 
@@ -504,8 +504,10 @@ void ScaleTrafficManager::_Step()
   }
 }
 
-void ScaleTrafficManager::Enqueue(int node, int vnet, Message *message)
+void ScaleTrafficManager::Enqueue(Message *message)
 {
+  int node = message->src;
+  int vnet = message->vnet;
   _input_buffer[node][vnet].push_back(message);
 }
 
@@ -520,3 +522,4 @@ Message *ScaleTrafficManager::Dequeue(int node, int vnet)
 
   return message;
 }
+

@@ -285,6 +285,8 @@ BookSimConfig::BookSimConfig( )
   AddStrField("watch_packets", "");
   AddStrField("watch_transactions", "");
 
+  _int_map["watch_all_packets"] = 0;
+
   AddStrField("watch_out", "");
 
   AddStrField("stats_out", "");

@@ -54,6 +54,7 @@
 #include "injection.hpp"
 #include "power_module.hpp"
 #include "dsent_power.hpp"
+#include "booksim_wrapper.hpp"
 
 
 
@@ -65,7 +66,11 @@
 TrafficManager * trafficManager = NULL;
 
 int GetSimTime() {
-  return trafficManager->getTime();
+  if (trafficManager) {
+    return trafficManager->getTime();
+  } else {
+    return gBookSim->GetSimTime();
+  }
 }
 
 class Stats;
@@ -90,6 +95,8 @@ int gNodes;
 bool gTrace;
 
 ostream * gWatchOut;
+
+BookSim * gBookSim = nullptr;
 
 
 
@@ -161,6 +168,8 @@ bool Simulate( BookSimConfig const & config )
 int main( int argc, char **argv )
 {
 
+#ifndef TEST_SCALE_TRAFFICMANAGER
+
   BookSimConfig config;
 
 
@@ -191,5 +200,22 @@ int main( int argc, char **argv )
    */
   bool result = Simulate( config );
   return result ? -1 : 0;
+
+#else
+
+  if (argc != 2) {
+    cerr << "Usage: " << argv[0] << " configfile..." << endl;
+    return 0;
+  }
+
+  BookSim booksim(argv[1]);
+  BookSim::RegisterGlobalBookSim(&booksim);
+
+  bool result = booksim.RunTest();
+
+  gBookSim = nullptr;
+
+  return result ? -1 : 0;
+#endif // TEST_SCALE_TRAFFICMANAGER
 }
 #endif
