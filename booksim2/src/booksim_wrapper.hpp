@@ -19,6 +19,8 @@ public:
   int PeekMessage(int node, int vnet);
 
   bool RunTest();
+  inline bool Idle() { return _traffic_manager->Idle() && _outstanding_messages == 0; }
+  inline void WakeUp() { _traffic_manager->WakeUp(); }
   inline int GetSimTime() { return _traffic_manager->getTime(); }
 
   inline static void RegisterGlobalBookSim(BookSim *booksim) {gBookSim = booksim;}

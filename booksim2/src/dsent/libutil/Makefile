@@ -18,7 +18,7 @@ endif
 DEF_FLAGS += -DLIBUTIL_IS_LOG=$(LIBUTIL_IS_LOG)
 
 INCLUDE_FLAGS = $(foreach dir, $(DIRS), -I$(dir))
-OPT_FLAGS = -O2 -g 
+OPT_FLAGS = -O2 -g -fPIC
 WARN_FLAGS = -pedantic -Wall -W -Wextra -Werror
 CXXFLAGS = $(OPT_FLAGS) $(WARN_FLAGS) $(INCLUDE_FLAGS) $(DEF_FLAGS)
 

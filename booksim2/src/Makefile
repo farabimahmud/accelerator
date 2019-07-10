@@ -28,16 +28,17 @@ LEX = flex
 YACC   = bison -y
 DEFINE = -DTEST_SCALE_TRAFFICMANAGER
 INCPATH = -I. -Iarbiters -Iallocators -Irouters -Inetworks -Ipower -Idsent
-CPPFLAGS += -Wall $(INCPATH) $(DEFINE)
+CPPFLAGS += -Wall $(DEFINE)
 CPPFLAGS += -O3
 CPPFLAGS += -g
 CFLAGS += -Wall -O3 -g
 CPPFLAGS += -std=c++11
 LFLAGS +=
+PYBIND11_INC = `python3 -m pybind11 --includes`
 
 OBJDIR := obj
 PROG := booksim
-LIB_BOOKSIM := libbooksim.so
+LIB_BOOKSIM := pybooksim.so
 STATIC_LIB_BOOKSIM := libbooksim.a
 
 ########## DSENT ###########
@@ -91,7 +92,7 @@ YACC_HDRS = y.tab.h
 YACC_OBJS = ${OBJDIR}/y.tab.o
 
 OBJS := $(DSENT_OBJS) $(CPP_OBJS) $(LEX_OBJS) $(YACC_OBJS)
-LIB_OBJS := $(DSENT_OBJS) $(LIB_CPP_OBJS) $(LEX_OBJS) $(YACC_OBJS)
+LIB_OBJS := $(LIB_CPP_OBJS) $(LEX_OBJS) $(YACC_OBJS) $(DSENT_OBJS)
 
 .PHONY: clean
 
@@ -115,7 +116,7 @@ $(PROG): $(OBJS) dsent/DSENT.o
 	 $(CXX) $(LFLAGS) $(LD_FLAGS) $^ -o $@ $(LD_LIBS)
 
 $(LIB_BOOKSIM): $(LIB_OBJS) dsent/DSENT.o
-	 $(CXX) $(LFLAGS) $(LD_FLAGS) -shared -Wl,-soname,$@ -o $@ $(LD_LIBS) $^
+	 $(CXX) -shared $(INCPATH) $(PYBIND11_INC) -o $@ $^ $(LFLAGS) $(LD_FLAGS) $(LD_LIBS)
 
 $(STATIC_LIB_BOOKSIM): $(LIB_OBJS) dsent/DSENT.o
 	ar rcs $@ $^
@@ -141,27 +142,27 @@ $(YACC_OBJS): $(YACC_SRCS)
 .SECONDEXPANSION:
 
 ${OBJDIR}/%.o: %.cpp | $$(@D)
-	$(CXX) $(CPPFLAGS) -MMD -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(INCPATH) $(PYBIND11_INC) -MMD -c $< -o $@
 
 # rules to compile networks
 ${OBJDIR}/%.o: networks/%.cpp 
-	$(CXX) $(CPPFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile arbiters
 ${OBJDIR}/%.o: arbiters/%.cpp 
-	$(CXX) $(CPPFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile allocators
 ${OBJDIR}/%.o: allocators/%.cpp 
-	$(CXX) $(CPPFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile routers
 ${OBJDIR}/%.o: routers/%.cpp 
-	$(CXX) $(CPPFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile power classes
 ${OBJDIR}/%.o: power/%.cpp
-	$(CXX) $(CPPFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 $(OBJDIR):
 	mkdir -p $@
