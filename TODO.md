@@ -15,6 +15,12 @@
 
 ### Todo:
 - message passing interfaces for programmability and expressiveness
-- flow control support extension and active-routing support
+- flow control support extension for bulk transfer
+- active-routing support
+    - processing elements in routers/NI and art tree construction
+    - sequencer for flit/packet/message processing during transmission
+    - tree scheduling
+        - level by level from leaves to root
+        - aggregate from children to parent for every node recursively until completion (binary tree like, 2x theoretical speedup)
 - support an array of accelerator instances as a distributed training system
     - model-parallelism support 
