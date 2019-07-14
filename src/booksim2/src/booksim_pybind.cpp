@@ -1,3 +1,5 @@
+#ifdef LIB_BOOKSIM
+
 #include <pybind11/pybind11.h>
 
 #include "booksim_wrapper.hpp"
@@ -27,3 +29,5 @@ PYBIND11_MODULE(pybooksim, m) {
     .value("MessageType_NUM", Message::MessageType::MessageType_NUM)
     .export_values();
 };
+
+#endif // #ifdef LIB_BOOKSIM

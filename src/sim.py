@@ -5,8 +5,10 @@ import time
 import sys
 
 sys.path.append('SCALE-Sim')
+sys.path.append('booksim2/src')
 
 from hmc import HMC
+import pybooksim
 
 
 def cleanup(args):
@@ -47,7 +49,7 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--arch-config', default='./configs/express.cfg',
+    parser.add_argument('--arch-config', default='./SCALE-Sim/configs/express.cfg',
                         help='accelerator architecture file, '
                              'default=SCALE-sim/configs/scale.cfg')
     parser.add_argument('--num-hmcs', default=16, type=int,
@@ -59,8 +61,8 @@ def main():
                         help='naming for this experiment run, default is empty')
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
-    #parser.add_argument('--booksim-config', default='', required=True,
-    #                    help='required config file for booksim')
+    parser.add_argument('--booksim-config', default='', required=True,
+                        help='required config file for booksim')
 
     args = parser.parse_args()
 
@@ -100,7 +102,9 @@ def main():
     print("====================================================")
 
     hmc = HMC(args)
+    booksim = pybooksim.BookSim(args.booksim_config)
     cycles = hmc.train()
+
 
     cleanup(args)
 

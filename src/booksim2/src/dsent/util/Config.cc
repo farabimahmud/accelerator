@@ -78,7 +78,8 @@ namespace DSENT
         Log::printLine("Config::constructTechModel");
 
         // Allocate static TechModel instance
-        const String& electrical_tech_model_filename = get("ElectricalTechModelFilename");
+        const String& electrical_tech_model_filename = std::string(getenv("BOOKSIMSRC")) +
+          std::string("/") + std::string(get("ElectricalTechModelFilename").toCString());
 
         TechModel* tech_model = new TechModel();
         tech_model->readFile(electrical_tech_model_filename);

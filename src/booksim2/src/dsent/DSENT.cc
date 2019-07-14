@@ -6,8 +6,8 @@
 
 namespace DSENT
 {
-    DSENT DSENT::m_routerInstance("dsent/configs/dsent_router.cfg");
-    DSENT DSENT::m_linkInstance("dsent/configs/dsent_link.cfg");
+    DSENT DSENT::m_routerInstance(string(getenv("BOOKSIMSRC")) + string("/dsent/configs/dsent_router.cfg"));
+    DSENT DSENT::m_linkInstance(string(getenv("BOOKSIMSRC")) + string("/dsent/configs/dsent_link.cfg"));
 
     DSENT* DSENT::getRouterInstance() {
         return &m_routerInstance;
