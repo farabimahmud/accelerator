@@ -7,7 +7,9 @@ import sys
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
 
+from model import Model
 from hmc import HMC
+from npu import NPU
 import pybooksim
 
 
@@ -51,12 +53,16 @@ def main():
 
     parser.add_argument('--arch-config', default='./SCALE-Sim/configs/express.cfg',
                         help='accelerator architecture file, '
-                             'default=SCALE-sim/configs/scale.cfg')
+                             'default=SCALE-Sim/configs/express.cfg')
     parser.add_argument('--num-hmcs', default=16, type=int,
                         help='number of hybrid memory cubes, default=16')
-    parser.add_argument('--network', default='SCALE-sim/topologies/conv_nets/alexnet.csv',
+    parser.add_argument('--num-vaults', default=16, type=int,
+                        help='number of vaults per hybrid memory cube')
+    parser.add_argument('--mini-batch-size', default=16, type=int,
+                        help='number of mini batch size per hmc accelerator, distributed to all vault npu')
+    parser.add_argument('--network', default='SCALE-Sim/topologies/conv_nets/alexnet.csv',
                         help='neural network architecture topology file, ' 
-                             'default=SCALE-sim/topologies/conv_nets/alexnet.csv')
+                             'default=SCALE-Sim/topologies/conv_nets/alexnet.csv')
     parser.add_argument('--run-name', default='',
                         help='naming for this experiment run, default is empty')
     parser.add_argument('--dump', default=False, action='store_true',
@@ -101,9 +107,10 @@ def main():
     print("Dataflow: \t", args.data_flow)
     print("====================================================")
 
-    hmc = HMC(args)
+    model = Model(args)
+    npu = NPU(args, model)
     booksim = pybooksim.BookSim(args.booksim_config)
-    cycles = hmc.train()
+    cycles = npu.train()
 
 
     cleanup(args)
