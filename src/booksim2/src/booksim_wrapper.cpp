@@ -34,6 +34,10 @@ BookSim::BookSim(string const & configfile)
   _cur_mid = 0;
   _outstanding_messages = 0;
   _print_messages = false;
+
+#ifdef LIB_BOOKSIM
+  gBookSim = this;
+#endif
 }
 
 BookSim::~BookSim() {

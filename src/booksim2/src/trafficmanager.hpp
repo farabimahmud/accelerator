@@ -306,6 +306,7 @@ public:
   virtual void DisplayOverallStatsCSV( ostream & os = cout ) const ;
 
   inline int getTime() { return _time;}
+  inline void setTime(int time) { _time = time; }
   Stats * getStats(const string & name) { return _stats[name]; }
 
 };
