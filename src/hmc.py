@@ -1,30 +1,35 @@
-import trace_gen_wrapper as tg
-import backpropagation as bp
 import math
-from file_read_backwards import FileReadBackwards
+
+from npu import NPU
 
 class HMC:
     def __init__(self, args):
         self.args = args
+        self.npu = NPU(args)
+        self.num_npus = self.args.num_vaults
+        self.mini_batch_per_npu = math.ceil(self.args.mini_batch_size / self.args.num_vaults)
+
+    def aggregate(self, model):
+        partial_model_per_npu = math.ceil(model.size / self.num_npus)
+        cycles = self.npu.aggregate(partial_model_per_npu, self.num_npus)
+
+        return cycles
 
     # parameters: cycles: inference_cycles/input/npu
-    def inference(self, cycles):
-        assert cycles > 0
+    def inference(self, model):
 
-        total_cycles = cycles * math.ceil(self.args.mini_batch_size / self.args.num_vaults)
+        npu_cycles = self.npu.inference(model)
+        cycles = npu_cycles * self.mini_batch_per_npu
 
-        return total_cycles
+        return cycles
     # inference() end
 
-    def aggregate_weights(self):
-        return
-
     # parameters: cycles: training_cycles/input/npu
-    def train(self, cycles=0):
-        assert cycles > 0
+    def train(self, model):
 
-        total_cycles = cycles * math.ceil(self.args.mini_batch_size / self.args.num_vaults)
+        npu_cycles = self.npu.train(model)
+        cycles = npu_cycles * self.mini_batch_per_npu
 
-        return total_cycles
+        return cycles
     # end of train()
 

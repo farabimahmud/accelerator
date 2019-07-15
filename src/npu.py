@@ -1,12 +1,22 @@
+import math
+
 import trace_gen_wrapper as tg
 import backpropagation as bp
 
 class NPU:
-    def __init__(self, args, model):
+    def __init__(self, args):
         self.args = args
-        self.model = model
 
-    def inference(self, training=False):
+    def aggregate(self, model_size, group_size):
+        # assume sram bw is same as matrix multiplication
+        # only first pe row/col is used
+        pe_list_size = max(self.args.pe_array_height, self.args.pe_array_width)
+
+        cycles = math.ceil(model_size / pe_list_size) * group_size
+
+        return cycles
+
+    def inference(self, model, training=False):
         print("\nFeed-Forward ...")
 
         if training:
@@ -17,20 +27,20 @@ class NPU:
         first = True
         total_cycles = 0
 
-        for l in range(self.model.num_layers):
-            name = self.model.layers[l]['name']
+        for l in range(model.num_layers):
+            name = model.layers[l]['name']
             print('\nCommencing run for ' + name)
 
-            ifmap_h = self.model.layers[l]['ifmap_h']
-            ifmap_w = self.model.layers[l]['ifmap_w']
+            ifmap_h = model.layers[l]['ifmap_h']
+            ifmap_w = model.layers[l]['ifmap_w']
 
-            filt_h = self.model.layers[l]['filter_h']
-            filt_w = self.model.layers[l]['filter_w']
+            filt_h = model.layers[l]['filter_h']
+            filt_w = model.layers[l]['filter_w']
 
-            num_channels = self.model.layers[l]['num_channels']
-            num_filters = self.model.layers[l]['num_filters']
+            num_channels = model.layers[l]['num_channels']
+            num_filters = model.layers[l]['num_filters']
 
-            stride = self.model.layers[l]['stride']
+            stride = model.layers[l]['stride']
 
             bw_str, detailed_str, util, cycles = tg.gen_all_traces(
                     array_h = self.args.pe_array_height,
@@ -55,26 +65,26 @@ class NPU:
         return total_cycles
     # inference() end
 
-    def backprop(self):
+    def backprop(self, model):
         print('\nBackward Propagation ...')
 
         total_cycles = 0
 
-        for l in reversed(range(self.model.num_layers)):
-            name = self.model.layers[l]['name']
+        for l in reversed(range(model.num_layers)):
+            name = model.layers[l]['name']
             print("")
             print("Commencing back-propagation run for " + name)
 
-            ifmap_h = self.model.layers[l]['ifmap_h']
-            ifmap_w = self.model.layers[l]['ifmap_w']
+            ifmap_h = model.layers[l]['ifmap_h']
+            ifmap_w = model.layers[l]['ifmap_w']
 
-            filt_h = self.model.layers[l]['filter_h']
-            filt_w = self.model.layers[l]['filter_w']
+            filt_h = model.layers[l]['filter_h']
+            filt_w = model.layers[l]['filter_w']
 
-            num_channels = self.model.layers[l]['num_channels']
-            num_filters = self.model.layers[l]['num_filters']
+            num_channels = model.layers[l]['num_channels']
+            num_filters = model.layers[l]['num_filters']
 
-            stride = self.model.layers[l]['stride']
+            stride = model.layers[l]['stride']
 
             cycles, util = bp.backprop(
                     array_h = self.args.pe_array_height,
@@ -100,13 +110,13 @@ class NPU:
         return total_cycles
     # end of backprop()
 
-    def train(self):
+    def train(self, model):
         print('Start a training epoch ...')
 
         total_cycles = 0
 
-        inference_cycles = self.inference(training=True)
-        backprop_cycles = self.backprop()
+        inference_cycles = self.inference(model, training=True)
+        backprop_cycles = self.backprop(model)
 
         total_cycles = inference_cycles + backprop_cycles
 

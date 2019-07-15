@@ -3,6 +3,7 @@ class Model:
         self.args = args
         self.num_layers = 0
         self.layers = []
+        self.size = 0
 
         self.parse_model()
 
@@ -11,6 +12,7 @@ class Model:
 
         first = True
 
+        print('\nModel loading ...')
         for row in param_file:
             if first:
                 first = False
@@ -20,7 +22,9 @@ class Model:
 
             # Do not continue if incomplete line
             if len(elems) < 9:
-                print('Warn: incomplete model layer description: line ', self.num_layers + 1)
+                if elems[0]:
+                    print('Warn: incomplete model layer description: line ', self.num_layers + 1)
+                    print(' -- ', row)
                 continue
 
 
@@ -35,8 +39,10 @@ class Model:
             self.layers[self.num_layers]['stride'] = int(elems[7])
 
             self.num_layers += 1
+            layer_size = int(elems[3]) * int(elems[4]) * int(elems[6]) * int(elems[7])
+            self.size += layer_size
 
-        print('Model reading finished')
+        print('Model loading finished\n')
         #for l in range(self.num_layers):
         #    print('layer ', l, ': {name: ', self.layers[l]['name'],
         #            ', ifmap_h: ', self.layers[l]['ifmap_h'], ', ifmap_w: ', self.layers[l]['ifmap_w'],

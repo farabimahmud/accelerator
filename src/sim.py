@@ -9,7 +9,6 @@ sys.path.append('booksim2/src')
 
 from model import Model
 from hmc import HMC
-from npu import NPU
 import pybooksim
 
 
@@ -107,11 +106,25 @@ def main():
     print("Dataflow: \t", args.data_flow)
     print("====================================================")
 
-    model = Model(args)
-    npu = NPU(args, model)
-    booksim = pybooksim.BookSim(args.booksim_config)
-    cycles = npu.train()
+    cycles = 0
 
+    model = Model(args)
+    hmc = HMC(args)
+    booksim = pybooksim.BookSim(args.booksim_config)
+
+    compute_cycles = hmc.train(model)
+    cycles += compute_cycles
+    print('training compute cycles: ', compute_cycles)
+
+    compute_cycles = hmc.aggregate(model)
+    cycles += compute_cycles
+    print('in-hmc weight aggregate cycles: ', compute_cycles)
+
+    booksim.SetSimTime(int(cycles))
+    booksim.WakeUp()
+    comm_cycles = booksim.GetSimTime() - cycles
+    print('communication cycles: ', comm_cycles)
+    cycles += comm_cycles
 
     cleanup(args)
 
