@@ -45,4 +45,8 @@ extern int gWriteReqBeginVC, gWriteReqEndVC;
 extern int gReadReplyBeginVC, gReadReplyEndVC;
 extern int gWriteReplyBeginVC, gWriteReplyEndVC;
 
+extern int gNumVNets;
+extern int gRequestBeginVC, gRequestEndVC;
+extern int gReplyBeginVC, gReplyEndVC;
+
 #endif

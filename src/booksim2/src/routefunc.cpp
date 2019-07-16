@@ -57,6 +57,7 @@ map<string, tRoutingFunction> gRoutingFunctionMap;
 /* Global information used by routing functions */
 
 int gNumVCs;
+int gNumVNets;
 
 /* Add more functions here
  *
@@ -68,6 +69,9 @@ int gReadReqBeginVC, gReadReqEndVC;
 int gWriteReqBeginVC, gWriteReqEndVC;
 int gReadReplyBeginVC, gReadReplyEndVC;
 int gWriteReplyBeginVC, gWriteReplyEndVC;
+
+int gRequestBeginVC, gRequestEndVC;
+int gReplyBeginVC, gReplyEndVC;
 
 // ============================================================
 //  QTree: Nearest Common Ancestor
@@ -657,6 +661,12 @@ void dim_order_mesh( const Router *r, const Flit *f, int in_channel, OutputSet *
   } else if ( f->type ==  Flit::WRITE_REPLY ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
+  } else if (f->type == Flit::REQUEST) {
+    vcBegin = gRequestBeginVC;
+    vcEnd = gRequestEndVC;
+  } else if (f->type == Flit::REPLY) {
+    vcBegin = gReplyBeginVC;
+    vcEnd = gReplyEndVC;
   }
   assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
 
@@ -1953,6 +1963,24 @@ void InitializeRoutingMap( const Configuration & config )
   gWriteReplyEndVC   = config.GetInt("write_reply_end_vc");
   if(gWriteReplyEndVC < 0) {
     gWriteReplyEndVC = gNumVCs - 1;
+  }
+
+  gNumVNets = config.GetInt("vnets");
+  gRequestBeginVC = config.GetInt("request_begin_vc");
+  if (gRequestBeginVC < 0) {
+    gRequestBeginVC = 0;
+  }
+  gRequestEndVC = config.GetInt("request_end_vc");
+  if (gRequestEndVC < 0) {
+    gRequestEndVC = gNumVCs / 2 - 1;
+  }
+  gReplyBeginVC = config.GetInt("reply_begin_vc");
+  if (gReplyBeginVC < 0) {
+    gReplyBeginVC = gNumVCs / 2;
+  }
+  gReplyEndVC = config.GetInt("reply_end_vc");
+  if (gReplyEndVC < 0) {
+    gReplyEndVC = gNumVCs - 1;
   }
 
   /* Register routing functions here */

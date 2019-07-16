@@ -207,6 +207,11 @@ BookSimConfig::BookSimConfig( )
   _int_map["write_reply_begin_vc"] = 10;
   _int_map["write_reply_end_vc"] = 15;
 
+  _int_map["request_begin_vc"] = 0;
+  _int_map["request_end_vc"] = 3;
+  _int_map["reply_begin_vc"] = 4;
+  _int_map["reply_end_vc"] = 7;
+
   // Control Injection of Packets into Replicated Networks
   _int_map["read_request_subnet"] = 0;
   _int_map["read_reply_subnet"] = 0;
