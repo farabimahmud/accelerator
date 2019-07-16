@@ -8,6 +8,7 @@ import numpy as np
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
 
+from collective_comm import *
 from model import Model
 from hmc import HMC
 import pybooksim
@@ -67,6 +68,8 @@ def main():
                         help='naming for this experiment run, default is empty')
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
+    parser.add_argument('--collective', default='tree',
+                        help='collective communication shedule (tree or ring), default=tree')
     parser.add_argument('--booksim-config', default='', required=True,
                         help='required config file for booksim')
 
@@ -112,6 +115,13 @@ def main():
     model = Model(args)
     hmc = HMC(args)
     booksim = pybooksim.BookSim(args.booksim_config)
+    if args.collective == 'tree':
+        cc = TreeCC(args)
+    elif args.collective == 'ring':
+        cc = RingCC(args)
+    else:
+        raise RuntimeError('Unknow collective communication schedule: ' + args.collective)
+
 
     compute_cycles = hmc.train(model)
     cycles += compute_cycles
@@ -125,14 +135,7 @@ def main():
 
     num_messages = model.size * 4 / 64; # message size assumed 64 bytes for now
 
-    schedule = [
-            {0: 1, 3: 2, 4: 5, 7: 6, 8: 9, 11: 10, 12: 13, 15: 14},
-            {1: 2, 5: 6, 9: 10, 13: 14},
-            {2: 6, 14: 10},
-            {10: 6}
-            ]
-
-    level = 0
+    iteration = 0
     future_comm = 0
     future_cycles = np.zeros(args.num_hmcs, dtype=int)
     levels = np.zeros(args.num_hmcs, dtype=int)
@@ -140,7 +143,7 @@ def main():
     num_messages_to_send = np.zeros(args.num_hmcs, dtype=int)
     num_messages_received = np.zeros(args.num_hmcs, dtype=int)
 
-    for src, dest in schedule[level].items(): 
+    for src, dest in cc.get_pairs(iteration).items():
         num_messages_to_send[src] = num_messages
         num_messages_remained += num_messages
 
@@ -148,7 +151,7 @@ def main():
         # send messages
         for src in range(args.num_hmcs):
             if num_messages_to_send[src]:
-                dest = schedule[levels[src]][src]
+                dest = cc.get_dest(levels[src], src)
                 booksim.IssueMessage(src, dest, -1, pybooksim.Message.WriteRequest)
                 num_messages_to_send[src] -= 1
                 num_messages_remained -= 1
@@ -168,14 +171,15 @@ def main():
                     num_messages_received[i] = 0
                     future_cycles[i] = booksim.GetSimTime() + hmc.aggregate(model)
                     levels[i] += 1
-                    if levels[i] < len(schedule) and i in schedule[levels[i]]:
+                    if levels[i] < cc.get_iterations() and cc.sender_in_iteration(levels[i], i):
                         future_comm += 1
 
-            if booksim.GetSimTime() == future_cycles[i] and levels[i] < len(schedule):
-                if i in schedule[levels[i]]:
-                    future_comm -= 1
-                    num_messages_to_send[i] = num_messages
-                    num_messages_remained += num_messages
+            if booksim.GetSimTime() == future_cycles[i] and \
+                    levels[i] < cc.get_iterations() and \
+                    cc.sender_in_iteration(levels[i], i):
+                future_comm -= 1
+                num_messages_to_send[i] = num_messages
+                num_messages_remained += num_messages
 
         # add broadcast after weight update
 
