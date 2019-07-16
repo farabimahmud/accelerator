@@ -17,8 +17,8 @@ def sram_train(
         ):
 
     # Dimensions of output feature map channel
-    ofmap_h = (ifmap_h - filt_h + strides) / strides
-    ofmap_w = (ifmap_w - filt_w + strides) / strides
+    ofmap_h = (ifmap_h - filt_h + strides) // strides
+    ofmap_w = (ifmap_w - filt_w + strides) // strides
     ofmap_channels = num_filters
 
     # Number of pixels in one convolution window
