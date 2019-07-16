@@ -3,6 +3,7 @@ import configparser as cp
 import os
 import time
 import sys
+import numpy as np
 
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
@@ -121,14 +122,72 @@ def main():
     print('in-hmc weight aggregate cycles: ', compute_cycles)
 
     booksim.SetSimTime(int(cycles))
-    booksim.WakeUp()
-    comm_cycles = booksim.GetSimTime() - cycles
+
+    num_messages = model.size * 4 / 64; # message size assumed 64 bytes for now
+
+    schedule = [
+            {0: 1, 3: 2, 4: 5, 7: 6, 8: 9, 11: 10, 12: 13, 15: 14},
+            {1: 2, 5: 6, 9: 10, 13: 14},
+            {2: 6, 14: 10},
+            {10: 6}
+            ]
+
+    level = 0
+    future_comm = 0
+    future_cycles = np.zeros(args.num_hmcs, dtype=int)
+    levels = np.zeros(args.num_hmcs, dtype=int)
+    num_messages_remained = 0
+    num_messages_to_send = np.zeros(args.num_hmcs, dtype=int)
+    num_messages_received = np.zeros(args.num_hmcs, dtype=int)
+
+    for src, dest in schedule[level].items(): 
+        num_messages_to_send[src] = num_messages
+        num_messages_remained += num_messages
+
+    while num_messages_remained or booksim.Idle() == False or future_comm:
+        # send messages
+        for src in range(args.num_hmcs):
+            if num_messages_to_send[src]:
+                dest = schedule[levels[src]][src]
+                booksim.IssueMessage(src, dest, -1, pybooksim.Message.WriteRequest)
+                num_messages_to_send[src] -= 1
+                num_messages_remained -= 1
+
+        # run interconnect for 1 cycle
+        booksim.WakeUp()
+
+        # peek and receive messages
+        for i in range(args.num_hmcs):
+            mid = booksim.PeekMessage(i, 0)
+            if mid != -1:
+                num_messages_received[i] += 1
+                #print('HMC ', i, ' receives a message (id:', mid, ')')
+
+                if num_messages_received[i] == model.size * 4 / 64:
+                    #print('schedule-level', levels[i], 'HMC', i, 'received all messages at cycle:', booksim.GetSimTime())
+                    num_messages_received[i] = 0
+                    future_cycles[i] = booksim.GetSimTime() + hmc.aggregate(model)
+                    levels[i] += 1
+                    if levels[i] < len(schedule) and i in schedule[levels[i]]:
+                        future_comm += 1
+
+            if booksim.GetSimTime() == future_cycles[i] and levels[i] < len(schedule):
+                if i in schedule[levels[i]]:
+                    future_comm -= 1
+                    num_messages_to_send[i] = num_messages
+                    num_messages_remained += num_messages
+
+        # add broadcast after weight update
+
+    print('max future_cycles:', max(future_cycles), ', booksim time:', booksim.GetSimTime())
+    comm_cycles = max(booksim.GetSimTime(), max(future_cycles)) - cycles
     print('communication cycles: ', comm_cycles)
     cycles += comm_cycles
+    print('aggregation cycles fraction: ' + str('{0:.2f}'.format(comm_cycles / cycles * 100)) + '%')
 
     cleanup(args)
 
-    print('Training cycles: ', cycles)
+    print('Training epoch cycles: ', cycles)
 
 if __name__ == '__main__':
     main()
