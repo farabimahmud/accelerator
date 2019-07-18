@@ -4,6 +4,7 @@ class Model:
         self.num_layers = 0
         self.layers = []
         self.size = 0
+        self.name = args.network.split('/')[-1].split('.')[0]
 
         self.parse_model()
 

@@ -17,6 +17,24 @@ class NPU:
         return cycles
 
     def inference(self, model, training=False):
+        avg_bw_file = open(model.name + '_avg_bw.csv', 'w')
+        max_bw_file = open(model.name + '_max_bw.csv', 'w')
+        cycle_file  = open(model.name + '_cyclces.csv', 'w')
+        detail_file = open(model.name + '_detail.csv', 'w')
+
+        avg_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tDRAM IFMAP Read BW,\tDRAM Filter Read BW,\tDRAM OFMAP Write BW,\tSRAM Read BW,\tSRAM OFMAP WRITE BW,\n')
+        max_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tMax DRAM IFMAP Read BW,\tMax DRAM Filter Read BW,\tMax DRAM OFMAP Write BW,\tMax SRAM Read BW,\tMax SRAM OFMAP Write BW,\n')
+        cycle_file.write('Layer,\tCycles,\t% Utilization,\n')
+        detail_log = 'Layer,' + \
+                     '\tDRAM_IFMAP_start,\tDRAM_IFMAP_stop,\tDRAM_IFMAP_bytes,' + \
+                     '\tDRAM_Filter_start,\tDRAM_Filter_stop,\tDRAM_Filter_bytes,' + \
+                     '\tDRAM_OFMAP_start,\tDRAM_OFMAP_stop,\tDRAM_OFMAP_bytes,' + \
+                     '\tSRAM_read_start,\tSRAM_read_stop,\tSRAM_read_bytes,' + \
+                     '\tSRAM_write_start,\tSRAM_write_stop,\tSRAM_write_bytes,\n'
+        detail_file.write(detail_log)
+
+        bw_head_str = str(self.args.ifmap_sram_size) + ',\t' + str(self.args.filter_sram_size) + ',\t' + str(self.args.ofmap_sram_size) + ',\t'
+
         print("\nFeed-Forward ...")
 
         if training:
@@ -26,6 +44,7 @@ class NPU:
 
         first = True
         total_cycles = 0
+        total_util   = 0
 
         for l in range(model.num_layers):
             name = model.layers[l]['name']
@@ -57,10 +76,42 @@ class NPU:
                     ofmap_sram_size = self.args.ofmap_sram_size,
                     ifmap_base = self.args.ifmap_offset,
                     filt_base = self.args.filter_offset,
-                    ofmap_base = self.args.ofmap_offset
+                    ofmap_base = self.args.ofmap_offset,
+                    sram_read_trace_file = model.name + '_' + name + '_sram_read.csv',
+                    sram_write_trace_file = model.name + '_' + name + '_sram_write.csv',
+                    dram_filter_trace_file = model.name + '_' + name + '_dram_filter_read.csv',
+                    dram_ifmap_trace_file = model.name + '_' + name + '_dram_ifmap_read.csv',
+                    dram_ofmap_trace_file = model.name + '_' + name + '_dram_ofmap_write.csv'
                     )
 
             total_cycles += int(cycles)
+            total_util += util * int(cycles)
+
+            avg_bw_log = bw_head_str + name + ',\t' + bw_str + '\n'
+            avg_bw_file.write(avg_bw_log)
+
+            detailed_log = name + ',\t' + detailed_str + '\n'
+            detail_file.write(detailed_log)
+
+            max_bw_log = bw_head_str + name + ',\t'
+            max_bw_log += tg.gen_max_bw_numbers(
+                    sram_read_trace_file = model.name + '_' + name + '_sram_read.csv',
+                    sram_write_trace_file = model.name + '_' + name + '_sram_write.csv',
+                    dram_filter_trace_file = model.name + '_' + name + '_dram_filter_read.csv',
+                    dram_ifmap_trace_file = model.name + '_' + name + '_dram_ifmap_read.csv',
+                    dram_ofmap_trace_file = model.name + '_' + name + '_dram_ofmap_write.csv'
+                    )
+            max_bw_file.write(max_bw_log + '\n')
+
+            cycle_file.write(name + ',\t' + cycles + ',\t' + str(util) + ',\n')
+
+        total_util /= total_cycles
+        cycle_file.write('Total,\t' + str(total_cycles) + ',\t' + str(total_util))
+
+        avg_bw_file.close()
+        max_bw_file.close()
+        cycle_file.close()
+        detail_file.close()
 
         return total_cycles
     # inference() end
