@@ -8,6 +8,7 @@ ScaleTrafficManager::ScaleTrafficManager(const Configuration &config, const
   : TrafficManager(config, net)
 {
   _vnets = config.GetInt("vnets");
+  _msg_buf_size = config.GetInt("msg_buf_size");
   _last_vnet.resize(_nodes, 0);
   _flit_size = config.GetInt("channel_width");
   _watch_all_packets = (config.GetInt("watch_all_packets") > 0);
@@ -504,11 +505,18 @@ void ScaleTrafficManager::_Step()
   }
 }
 
-void ScaleTrafficManager::Enqueue(Message *message)
+bool ScaleTrafficManager::Enqueue(Message *message)
 {
   int node = message->src;
   int vnet = message->vnet;
-  _input_buffer[node][vnet].push_back(message);
+
+  if (_msg_buf_size == -1 ||
+      _input_buffer[node][vnet].size() < (size_t) _msg_buf_size) {
+    _input_buffer[node][vnet].push_back(message);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 Message *ScaleTrafficManager::Dequeue(int node, int vnet)

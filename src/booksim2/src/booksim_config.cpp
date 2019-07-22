@@ -228,6 +228,9 @@ BookSimConfig::BookSimConfig( )
   _int_map["write_reply_size"]   = 1;
   AddStrField("write_reply_size", ""); // workaraound to allow for vector specification
 
+  // Control injection flow by limiting message buffer size
+  _int_map["msg_buf_size"] = 16;
+
   //==== Simulation parameters ==========================
 
   // types:

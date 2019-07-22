@@ -59,12 +59,17 @@ BookSim::~BookSim() {
 int BookSim::IssueMessage(int src, int dest, int id,  Message::MessageType type)
 {
   if (id == -1) {
-    id = _cur_mid++;
+    id = _cur_mid;
   }
 
   Message *message = Message::New(type, id, src, dest);
-  _traffic_manager->Enqueue(message);
-  _outstanding_messages++;
+  if (_traffic_manager->Enqueue(message)) {
+    _outstanding_messages++;
+    _cur_mid++;
+  } else {
+    message->Free();
+    return -1;
+  }
 
   if (_print_messages) {
     *gWatchOut << GetSimTime() << " | node" << src << " | "

@@ -10,6 +10,7 @@ protected:
   int _flit_size;
   bool _watch_all_packets;
   int _vnets;
+  int _msg_buf_size;
   vector<int> _last_vnet;
 
 private:
@@ -28,7 +29,7 @@ public:
   ScaleTrafficManager(const Configuration &config, const vector<Network *> &net);
   ~ScaleTrafficManager();
 
-  void Enqueue(Message *message);
+  bool Enqueue(Message *message);
   Message *Dequeue(int node, int vnet);
 
   inline void WakeUp() { _Step(); }
