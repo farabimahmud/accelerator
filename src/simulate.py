@@ -15,36 +15,17 @@ import pybooksim
 
 
 def cleanup(args):
-    if not os.path.exists("./outputs/"):
-        os.system("mkdir ./outputs")
-
-    net_name = args.network.split('/')[-1].split('.')[0]
-
-    if args.run_name == '':
-        path = './outputs/' + net_name + '_' + self.data_flow
-    else:
-        path = './outputs/' + args.run_name
-
-    if os.path.exists(path):
-        t = time.time()
-        old_path = path + '_' + str(t)
-        os.system('mv ' + path + ' ' + old_path)
-    os.system('mkdir ' + path)
-
-    cmd = 'mv *.csv ' + path
+    cmd = 'mkdir ' + args.outdir + '/layer_wise'
     os.system(cmd)
 
-    cmd = 'mkdir ' + path + '/layer_wise'
+    cmd = 'mv ' + args.outdir + '/*sram* ' + args.outdir + '/layer_wise'
     os.system(cmd)
 
-    cmd = 'mv ' + path + '/*sram* ' + path + '/layer_wise'
-    os.system(cmd)
-
-    cmd = 'mv ' + path + '/*dram* ' + path + '/layer_wise'
+    cmd = 'mv ' + args.outdir + '/*dram* ' + args.outdir + '/layer_wise'
     os.system(cmd)
 
     if args.dump == False:
-        cmd = 'rm -rf ' + path + '/layer_wise'
+        cmd = 'rm -rf ' + args.outdir + '/layer_wise'
         os.system(cmd)
 
 
@@ -66,6 +47,8 @@ def main():
                              'default=SCALE-Sim/topologies/conv_nets/alexnet.csv')
     parser.add_argument('--run-name', default='',
                         help='naming for this experiment run, default is empty')
+    parser.add_argument('--outdir', default='',
+                        help='naming for the output directory, default is empty')
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
     parser.add_argument('--collective', default='tree',
@@ -80,6 +63,13 @@ def main():
 
     if not args.run_name:
         args.run_name = config.get('general', 'run_name')
+
+    if not args.run_name:
+        net_name = args.network.split('/')[-1].split('.')[0]
+        args.run_name = net_name + args.data_flow
+
+    path = './outputs/' + args.run_name
+    args.outdir = path
 
     arch_sec = 'architecture_presets'
 
@@ -98,6 +88,16 @@ def main():
     args.ofmap_grad_offset  = int(config.get(arch_sec, 'OfmapGradOffset'))
 
     args.data_flow = config.get(arch_sec, 'Dataflow')
+
+    # Create output directory
+    if not os.path.exists("./outputs/"):
+        os.system("mkdir ./outputs")
+
+    if os.path.exists(args.outdir):
+        t = time.time()
+        old_path = args.outdir + '_' + str(t)
+        os.system('mv ' + args.outdir + ' ' + old_path)
+    os.system('mkdir ' + args.outdir)
 
     print("====================================================")
     print("******************* SCALE SIM **********************")
