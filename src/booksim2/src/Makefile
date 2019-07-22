@@ -29,9 +29,10 @@ YACC   = bison -y
 DEFINE = -DTEST_SCALE_TRAFFICMANAGER
 INCPATH = -I. -Iarbiters -Iallocators -Irouters -Inetworks -Ipower -Idsent
 CPPFLAGS += -Wall $(DEFINE)
-CPPFLAGS += -O3
-CPPFLAGS += -g
-CFLAGS += -Wall -O3 -g
+#CPPFLAGS += -O3
+#CPPFLAGS += -g
+#CFLAGS += -Wall -O3 -g
+CFLAGS += -Wall
 CPPFLAGS += -std=c++11
 LFLAGS +=
 PYBIND11_INC = `python3 -m pybind11 --includes`
@@ -96,19 +97,28 @@ LIB_OBJS := $(LIB_CPP_OBJS) $(LEX_OBJS) $(YACC_OBJS) $(DSENT_OBJS)
 
 .PHONY: clean
 
+all: CPPFLAGS += -O3 -g
+all: CFLAGS += -O3 -g
 all: $(LIB_UTIL) $(PROG)
+
+# dynamic library debug mode
+libdbg: DEFINE += -DLIB_BOOKSIM
+libdbg: CPPFLAGS += -O0 -g -fPIC
+libdbg: CFLAGS += -O0 -g -fPIC
+libdbg: CXXFLAGS += -fPIC
+libdbg: ${LIB_UTIL} $(LIB_BOOKSIM)
 
 # dynamic library
 lib: DEFINE += -DLIB_BOOKSIM
-lib: CPPFLAGS += -fPIC
-lib: CFLAGS += -fPIC
+lib: CPPFLAGS += -O3 -g -fPIC
+lib: CFLAGS += -O3 -g -fPIC
 lib: CXXFLAGS += -fPIC
 lib: ${LIB_UTIL} $(LIB_BOOKSIM)
 
 # static library
 staticlib: DEFINE += -DLIB_BOOKSIM
-staticlib: CPPFLAGS += -fPIC
-staticlib: CFLAGS += -fPIC
+staticlib: CPPFLAGS += +O3 -g -fPIC
+staticlib: CFLAGS += -O3 -g -fPIC
 staticlib: CXXFLAGS += -fPIC
 staticlib: ${LIB_UTIL} $(STATIC_LIB_BOOKSIM)
 
