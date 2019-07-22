@@ -143,15 +143,16 @@ def main():
     num_messages_to_send = np.zeros(args.num_hmcs, dtype=int)
     num_messages_received = np.zeros(args.num_hmcs, dtype=int)
 
-    for src, dest in cc.get_pairs(iteration).items():
+    for src, dest in cc.get_reduce_pairs(iteration).items():
         num_messages_to_send[src] = num_messages
         num_messages_remained += num_messages
 
+    # Reduce phase for weight delta aggragation
     while num_messages_remained or booksim.Idle() == False or future_comm:
         # send messages
         for src in range(args.num_hmcs):
             if num_messages_to_send[src]:
-                dest = cc.get_dest(levels[src], src)
+                dest = cc.get_reduce_dest(levels[src], src)
                 booksim.IssueMessage(src, dest, -1, pybooksim.Message.WriteRequest)
                 num_messages_to_send[src] -= 1
                 num_messages_remained -= 1
@@ -171,23 +172,72 @@ def main():
                     num_messages_received[i] = 0
                     future_cycles[i] = booksim.GetSimTime() + hmc.aggregate(model)
                     levels[i] += 1
-                    if levels[i] < cc.get_iterations() and cc.sender_in_iteration(levels[i], i):
+                    if levels[i] < cc.get_iterations() and cc.reduce_sender_in_iteration(levels[i], i):
                         future_comm += 1
 
             if booksim.GetSimTime() == future_cycles[i] and \
                     levels[i] < cc.get_iterations() and \
-                    cc.sender_in_iteration(levels[i], i):
+                    cc.reduce_sender_in_iteration(levels[i], i):
                 future_comm -= 1
                 num_messages_to_send[i] = num_messages
                 num_messages_remained += num_messages
 
-        # add broadcast after weight update
+    print('max future_cycles: {}, booksim time: {}'.format(max(future_cycles), booksim.GetSimTime()))
+    reduce_comm_cycles = max(booksim.GetSimTime(), max(future_cycles)) - cycles
+    cycles += reduce_comm_cycles
+    print('reduce communication cycles: {}'.format(reduce_comm_cycles))
 
-    print('max future_cycles:', max(future_cycles), ', booksim time:', booksim.GetSimTime())
-    comm_cycles = max(booksim.GetSimTime(), max(future_cycles)) - cycles
-    print('communication cycles: ', comm_cycles)
-    cycles += comm_cycles
-    print('aggregation cycles fraction: ' + str('{0:.2f}'.format(comm_cycles / cycles * 100)) + '%')
+    # Broadcast phase after weight delta reduction
+    levels = np.zeros(args.num_hmcs, dtype=int)
+    iteration = 0
+
+    for src, dest in cc.get_broadcast_pairs(iteration).items():
+        num_messages_to_send[src] = num_messages
+        num_messages_remained += num_messages
+
+    booksim.SetSimTime(cycles)
+    while num_messages_remained or booksim.Idle() == False:
+        # send messages
+        for src in range(args.num_hmcs):
+            if num_messages_to_send[src]:
+                dest = cc.get_broadcast_dest(levels[src], src)
+                mid = booksim.IssueMessage(src, dest, -1, pybooksim.Message.WriteRequest)
+                if mid != -1:
+                    num_messages_to_send[src] -= 1
+                    num_messages_remained -= 1
+                    if num_messages_to_send[src] == 0:
+                        levels[dest] = levels[src]
+                        levels[src] += 1
+                        if levels[src] < cc.get_iterations():
+                            assert cc.broadcast_sender_in_iteration(levels[src], src)
+                            num_messages_to_send[src] = num_messages
+                            num_messages_remained += num_messages
+
+        # run interconnect for 1 cycle
+        booksim.WakeUp()
+
+        # peek and receive messages
+        for i in range(args.num_hmcs):
+            mid = booksim.PeekMessage(i, 0)
+            if mid != -1:
+                num_messages_received[i] += 1
+                #print('HMC ', i, ' receives a message (id:', mid, ')')
+
+                if num_messages_received[i] == num_messages:
+                    #print('schedule-level', levels[i], 'HMC', i, 'received all messages at cycle:', booksim.GetSimTime())
+                    num_messages_received[i] = 0
+                    levels[i] += 1
+                    if levels[i] < cc.get_iterations():
+                        assert cc.broadcast_sender_in_iteration(levels[i], i)
+                        num_messages_to_send[i] = num_messages
+                        num_messages_remained += num_messages
+
+    broadcast_comm_cycles = booksim.GetSimTime() - cycles
+    print('broadcast communication cycles: {}'.format(broadcast_comm_cycles))
+    cycles += broadcast_comm_cycles
+    reduce_cycle_percent = reduce_comm_cycles / cycles * 100
+    broadcast_cycle_percent = broadcast_comm_cycles / cycles * 100
+    print('reduce cycles fraction: {:.2f} %, broadcast cycles fraction: {:.2f} %'.format(reduce_cycle_percent, broadcast_cycle_percent))
 
     cleanup(args)
 
