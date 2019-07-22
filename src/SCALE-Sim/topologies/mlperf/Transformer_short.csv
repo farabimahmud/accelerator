@@ -1,5 +1,5 @@
 Layer name, IFMAP Height, IFMAP Width, Filter Height, Filter Width, Channels, Num Filter, Strides,
-,,,,,,,,
+
 Embedding,512,1,1,1,1,33708,1,
 Attn_Xmap,1,1,1,1,512,64,1, 
 Attn_Kmap,1,1,1,1,512,64,1, 
