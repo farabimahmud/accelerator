@@ -66,10 +66,17 @@ class Torus:
                     self.edges.append((node, n))
 
             graph = 'digraph G {\n'
+            graph += '  subgraph {\n'
             graph += ''.join('    {} -> {};\n'.format(*e) for e in self.edges)
 
-            #style = '    "{}" [style=""]'
+            for node in range(self.nodes):
+                if node % self.dimension == 0:
+                    graph += '  {rank = same; '
+                graph += ' {};'.format(node)
+                if node % self.dimension == self.dimension - 1:
+                    graph += '}\n'
 
+            graph += '  } /* closing subgraph */\n'
             graph += '}\n'
 
             f = open('torus_graph.dot', 'w')
@@ -90,15 +97,20 @@ class Torus:
         num_trees = 0
         iteration = 0
 
+        print('nodes: {}'.format(self.nodes))
         while num_trees < self.nodes:
             #print('iteration {}'.format(iteration))
             from_nodes = deepcopy(self.from_nodes)
             for root in range(self.nodes):
+                if len(tree_nodes[root]) == self.nodes:
+                    continue
                 current_tree_nodes = deepcopy(tree_nodes[root])
                 for p, parent in enumerate(current_tree_nodes):
                     children = deepcopy(from_nodes[parent])
                     new_edges = 0
                     for c, child in enumerate(children):
+                        #if new_edges == 2:
+                        #    break
                         #print(' child {}'.format(child))
                         if child not in tree_nodes[root]:
                             #print(' -- add node {} to tree {}'.format(child, root))
@@ -109,8 +121,6 @@ class Torus:
                             #print('    after : {}'.format(trees[root]))
                             #print('    tree nodes: {}'.format(tree_nodes[root]))
                             new_edges += 1
-                            if new_edges == 2:
-                                break
                 if len(tree_nodes[root]) == self.nodes:
                     num_trees += 1
                     #print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
@@ -128,9 +138,9 @@ class Torus:
 
         #os.makedirs(directory)
 
-        #colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#980043','#67001f']
+        colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#980043','#67001f']
         #colors = ['#ffffcc','#c7e9b4','#7fcdbb','#41b6c4','#2c7fb8','#253494']
-        colors = ['#f1eef6','#d4b9da','#c994c7','#df65b0','#dd1c77','#980043']
+        #colors = ['#f1eef6','#d4b9da','#c994c7','#df65b0','#dd1c77','#980043']
 
         tree = 'digraph tree {\n'
         tree += '  rankdir = BT;\n'
