@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from copy import deepcopy
 
 class Torus:
@@ -8,6 +9,7 @@ class Torus:
         self.from_nodes = {}
         self.to_nodes = {}
         self.edges = []
+        self.adjacency_matrix = np.zeros(nodes, nodes)
 
 
     def build_graph(self, generate_graph=False):
@@ -23,10 +25,14 @@ class Torus:
                 north = node + self.dimension * (self.dimension - 1)
                 self.from_nodes[node].append(north)
                 self.to_nodes[node].append(north)
+                self.adjacency_matrix[node][north] = 1
+                self.adjacency_matrix[north][node] = 1
             else:
                 north = node - self.dimension
                 self.from_nodes[node].append(north)
                 self.to_nodes[node].append(north)
+                self.adjacency_matrix[node][north] = 1
+                self.adjacency_matrix[north][node] = 1
 
             if row == self.dimension - 1:
                 south = node - self.dimension * (self.dimension - 1)
@@ -41,10 +47,14 @@ class Torus:
                 west = node + self.dimension - 1
                 self.from_nodes[node].append(west)
                 self.to_nodes[node].append(west)
+                self.adjacency_matrix[node][west] = 1
+                self.adjacency_matrix[west][node] = 1
             else:
                 west = node - 1
                 self.from_nodes[node].append(west)
                 self.to_nodes[node].append(west)
+                self.adjacency_matrix[node][west] = 1
+                self.adjacency_matrix[west][node] = 1
 
             if col == self.dimension - 1:
                 east = node - self.dimension + 1
