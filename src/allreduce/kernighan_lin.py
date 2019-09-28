@@ -849,13 +849,46 @@ def compute_trees(adjacency_matrix, num_elements, alpha, backtrack, log_tree = F
         #print(adjacency_matrix)
         #print("Links:")
         #print(adj)
+
+    return topo, scan
 # def compute_trees(adjacency_matrix, num_elements, alpha, backtrack, log_tree = False)
+
+
+def link_conflict_detection(topology, scan, verbose=False):
+    links_tree_map = []
+    conflicts = []
+
+    for root in range(16):
+        depth = len(scan[root]) - 1
+        for row in range(1, depth):
+            if row > len(links_tree_map):
+                links_tree_map.append({})
+                conflicts.append(0)
+            start = scan[root][row]
+            end = scan[root][row + 1]
+            for i in range(start, end):
+                if i % 2 == 0:
+                    parent = topology[root][i - 1]
+                    child = topology[root][i]
+                    link = "{}->{}".format(child, parent)
+                    if link in links_tree_map[row - 1]:
+                        if verbose:
+                            print('Conflict found for link {} between tree {} and tree {}'.format(link, links_tree_map[row - 1][link], root))
+                        conflicts[row - 1] += 1
+                    else:
+                        links_tree_map[row - 1][link] = root
+
+    print('Conflicts summary:')
+    for i, num in enumerate(conflicts):
+        print('  row {}: {}'.format(i + 1, num))
+# def link_conflict_detection(topology, scan)
 
 
 def test():
     network = networks.Torus(nodes=16, dimension=4)
     network.build_graph()
-    compute_trees(network.adjacency_matrix, 16, 0.7, False, True)
+    topology, scan = compute_trees(network.adjacency_matrix, 16, 0.7, False, True)
+    link_conflict_detection(topology, scan)
 
 
 if __name__ == '__main__':
