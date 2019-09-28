@@ -9,10 +9,13 @@ class Torus:
         self.from_nodes = {}
         self.to_nodes = {}
         self.edges = []
-        self.adjacency_matrix = np.zeros(nodes, nodes)
+        self.adjacency_matrix = np.zeros((nodes, nodes))
 
 
     def build_graph(self, generate_graph=False):
+
+        link_weight = 2
+
         for node in range(self.nodes):
             self.from_nodes[node] = []
             self.to_nodes[node] = []
@@ -25,14 +28,14 @@ class Torus:
                 north = node + self.dimension * (self.dimension - 1)
                 self.from_nodes[node].append(north)
                 self.to_nodes[node].append(north)
-                self.adjacency_matrix[node][north] = 1
-                self.adjacency_matrix[north][node] = 1
+                self.adjacency_matrix[node][north] = link_weight
+                self.adjacency_matrix[north][node] = link_weight
             else:
                 north = node - self.dimension
                 self.from_nodes[node].append(north)
                 self.to_nodes[node].append(north)
-                self.adjacency_matrix[node][north] = 1
-                self.adjacency_matrix[north][node] = 1
+                self.adjacency_matrix[node][north] = link_weight
+                self.adjacency_matrix[north][node] = link_weight
 
             if row == self.dimension - 1:
                 south = node - self.dimension * (self.dimension - 1)
@@ -47,14 +50,14 @@ class Torus:
                 west = node + self.dimension - 1
                 self.from_nodes[node].append(west)
                 self.to_nodes[node].append(west)
-                self.adjacency_matrix[node][west] = 1
-                self.adjacency_matrix[west][node] = 1
+                self.adjacency_matrix[node][west] = link_weight
+                self.adjacency_matrix[west][node] = link_weight
             else:
                 west = node - 1
                 self.from_nodes[node].append(west)
                 self.to_nodes[node].append(west)
-                self.adjacency_matrix[node][west] = 1
-                self.adjacency_matrix[west][node] = 1
+                self.adjacency_matrix[node][west] = link_weight
+                self.adjacency_matrix[west][node] = link_weight
 
             if col == self.dimension - 1:
                 east = node - self.dimension + 1

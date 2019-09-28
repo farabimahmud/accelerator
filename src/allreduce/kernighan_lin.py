@@ -884,11 +884,69 @@ def link_conflict_detection(topology, scan, verbose=False):
 # def link_conflict_detection(topology, scan)
 
 
+def generate_trees_dotfile(filename, topology, scan):
+    colors = ['#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7', '#df65b0', '#e7298a',
+            '#ce1256', '#980043', '#67001f']
+
+    tree = 'digraph tree {\n'
+    tree += '  rankdir = BT;\n'
+    tree += '  subgraph {\n'
+
+    ranks = {}
+
+    max_depth = -1
+    ranks[0] = []
+    for root in range(16):
+        tree += '    /* tree {} */\n'.format(root)
+        ranks[0].append('"{}-{}"'.format(root, root))
+
+        depth = len(scan[root]) - 1
+        if depth > max_depth:
+            max_depth = depth
+
+        for row in range(1, depth):
+            start = scan[root][row]
+            end = scan[root][row + 1]
+            iteration = depth - row
+            for i in range(start, end):
+                if i % 2 == 0:
+                    parent = '"{}-{}"'.format(root, topology[root][i - 1])
+                    child = '"{}-{}"'.format(root, topology[root][i])
+                    if not row in ranks.keys():
+                        ranks[row] = []
+                    ranks[row].append(child)
+                    tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, iteration))
+
+    tree += '    // note that rank is used in the subgraph\n'
+    for rank in range(max_depth):
+        if ranks[rank]:
+            level = '    {rank = same;'
+            for node in ranks[rank]:
+                level += ' {};'.format(node)
+            level += '}\n'
+            tree += level
+
+    tree += '    // node colors\n'
+    style = '    {} [style="filled", fillcolor="{}"];\n'
+    for rank in range(max_depth):
+        if ranks[rank]:
+            tree += ''.join(style.format(node, colors[rank % len(colors)]) for node in ranks[rank])
+
+    tree += '  } /* closing subgraph */\n'
+    tree += '}\n'
+
+    f = open(filename, 'w')
+    f.write(tree)
+    f.close()
+# def generate_trees_dotfile(filename, topology, scan)
+
+
 def test():
     network = networks.Torus(nodes=16, dimension=4)
     network.build_graph()
     topology, scan = compute_trees(network.adjacency_matrix, 16, 0.7, False, True)
     link_conflict_detection(topology, scan)
+    generate_trees_dotfile('kl_trees.dot', topology, scan)
 
 
 if __name__ == '__main__':
