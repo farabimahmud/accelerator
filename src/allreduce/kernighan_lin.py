@@ -7,7 +7,6 @@ import networks
 def print_topo(head, topo_row, scan_row):
     print(head + ':')
     depth = len(scan_row) - 1
-    print('depth: {}'.format(depth))
     for row in range(depth):
         start = scan_row[row]
         end = scan_row[row + 1]
@@ -157,7 +156,7 @@ def kernighan_lin(adjacency_matrix, partitions, num_partitions, cluster_pairs):
                     partitions_temp[i] = 0
 
             # Step 1b: Shuffle using random generator
-            #random.shuffle(cluster_list)
+            random.shuffle(cluster_list)
             for cluster in cluster_list:
                 if first_partition < target_partition:
                     partitions_temp[cluster] = 1
@@ -358,7 +357,7 @@ def kl_generate_binary_tree(adjacency_matrix, partitions, cluster_pairs, roots, 
 
             # if no candidates
             if candidates[0] != -1:
-                #random.shuffle(candidates)
+                random.shuffle(candidates)
                 child = candidates[0]
 
             if child == -1:
@@ -829,9 +828,7 @@ def compute_trees(adjacency_matrix, num_elements, alpha, backtrack, log_tree = F
         scan.append([])
         topo[i].append(i)
         scan[i].append(0)
-        print('before: {}'.format(scan[i]))
         topo[i], scan[i] = compute_trees_from_root(adjacency_matrix_cp, num_elements, i, alpha, backtrack, topo[i], scan[i])
-        print('after: {}'.format(scan[i]))
 
     # NOTE: must sum up adjacent weight matrix to show link usage before readjusting repo
     # from 0, 1, ..., n_gpus format to dev_id format, which will cause segfault
@@ -846,24 +843,12 @@ def compute_trees(adjacency_matrix, num_elements, alpha, backtrack, log_tree = F
 
     if log_tree:
         for i in range(num_elements):
-            print_topo("Tree {}".format(i), topo[i], scan[i])
-            #print("Tree {}:".format(i))
-            #depth = len(scan[i]) - 1
-            #for row in range(depth):
-            #    start = scan[i][row]
-            #    end = scan[i][row + 1]
-            #    print(scan)
-            #    output = ""
-            #    for j in range(start, end):
-            #        for k in range((2 << (depth - row - 2)) + 1):
-            #            output += " "
-            #        output += str(topo[j])
-            #    print(output)
+            print_topo("\nTree {}".format(i), topo[i], scan[i])
 
-        print("W:")
-        print(adjacency_matrix)
-        print("Links:")
-        print(adj)
+        #print("W:")
+        #print(adjacency_matrix)
+        #print("Links:")
+        #print(adj)
 # def compute_trees(adjacency_matrix, num_elements, alpha, backtrack, log_tree = False)
 
 
