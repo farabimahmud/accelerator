@@ -888,6 +888,8 @@ def generate_trees_dotfile(filename, topology, scan):
     colors = ['#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7', '#df65b0', '#e7298a',
             '#ce1256', '#980043', '#67001f']
 
+    trees = {}
+
     tree = 'digraph tree {\n'
     tree += '  rankdir = BT;\n'
     tree += '  subgraph {\n'
@@ -897,6 +899,8 @@ def generate_trees_dotfile(filename, topology, scan):
     max_depth = -1
     ranks[0] = []
     for root in range(16):
+        trees[root] = []
+
         tree += '    /* tree {} */\n'.format(root)
         ranks[0].append('"{}-{}"'.format(root, root))
 
@@ -908,14 +912,16 @@ def generate_trees_dotfile(filename, topology, scan):
             start = scan[root][row]
             end = scan[root][row + 1]
             iteration = depth - row
+            if end > start and not row in ranks.keys():
+                ranks[row] = []
+            trees[root].append([])
             for i in range(start, end):
                 if i % 2 == 0:
                     parent = '"{}-{}"'.format(root, topology[root][i - 1])
                     child = '"{}-{}"'.format(root, topology[root][i])
-                    if not row in ranks.keys():
-                        ranks[row] = []
                     ranks[row].append(child)
                     tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, iteration))
+                    trees[root][row - 1].append((topology[root][i], topology[root][i - 1]))
 
     tree += '    // note that rank is used in the subgraph\n'
     for rank in range(max_depth):
@@ -938,7 +944,123 @@ def generate_trees_dotfile(filename, topology, scan):
     f = open(filename, 'w')
     f.write(tree)
     f.close()
+
+    return trees
 # def generate_trees_dotfile(filename, topology, scan)
+
+
+def link_conflict_resolution(network, conflict_trees, verbose=False):
+    if verbose:
+        print('Conflict trees:')
+        for root in range(network.nodes):
+            print('     tree {}:'.format(root))
+            for row in conflict_trees[root]:
+                print('         {}'.format(row))
+
+    # initialize empty trees
+    trees = {}
+    tree_nodes = {}
+    tree_level_nodes = {}
+    for root in range(network.nodes):
+        trees[root] = []
+        tree_nodes[root] = [root]
+        tree_level_nodes[root] = {0: []}
+
+    # tree construction
+    num_trees = 0
+    iteration = 0
+
+    #root = 0
+    from_nodes = deepcopy(network.from_nodes)
+    while num_trees < network.nodes:
+
+        change = False
+
+        for root in range(network.nodes):
+            if len(tree_nodes[root]) == network.nodes:
+                continue
+
+            child_parent_row = conflict_trees[root][0]
+            for (child, parent) in child_parent_row:
+                if child not in tree_level_nodes[root][iteration] and parent not in tree_level_nodes[root][iteration]:
+                    if child in from_nodes[parent]:
+                        assert(child not in tree_nodes[root])
+                        change = True
+                        if verbose:
+                            print(' -- add node {} to tree {}'.format(child, root))
+                            print('    before: {}'.format(trees[root]))
+                        tree_nodes[root].append(child)
+                        from_nodes[parent].remove(child)
+                        trees[root].append((child, parent, iteration))
+                        tree_level_nodes[root][iteration].append(child)
+                        if verbose:
+                            print('    after : {}'.format(trees[root]))
+                            print('    tree nodes: {}'.format(tree_nodes[root]))
+                        if parent not in tree_level_nodes[root][iteration]:
+                            tree_level_nodes[root][iteration].append(parent)
+                        conflict_trees[root][0].remove((child, parent))
+            if len(conflict_trees[root][0]) == 0:
+                conflict_trees[root].pop(0)
+            if len(tree_nodes[root]) == network.nodes:
+                num_trees += 1
+                if verbose:
+                    print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
+
+        if not change:
+            from_nodes = deepcopy(network.from_nodes)
+            iteration += 1
+            for root in range(network.nodes):
+                tree_level_nodes[root][iteration] = []
+
+    return trees, iteration + 1
+#def link_conflict_resolution(topology, scan, verbose=False)
+
+
+def generate_conflict_free_trees_dotfile(filename, network, trees, iteration):
+    colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#980043','#67001f']
+
+    tree = 'digraph tree {\n'
+    tree += '  rankdir = BT;\n'
+    tree += '  subgraph {\n'
+
+    ranks = {}
+    for rank in range(iteration + 1):
+        ranks[rank] = []
+
+    for root in range(network.nodes):
+        tree += '    /* tree {} */\n'.format(root)
+        ranks[0].append('"{}-{}"'.format(root, root))
+        for edge in trees[root]:
+            child = '"{}-{}"'.format(root, edge[0])
+            parent = '"{}-{}"'.format(root, edge[1])
+            cycle = iteration - edge[2]
+            if edge[2] + 1 not in ranks.keys():
+                print('iteration: {}, key: {}'.format(iteration, edge[2] + 1))
+            ranks[edge[2] + 1].append(child)
+            tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, cycle))
+
+    tree += '    // note that rank is used in the subgraph\n'
+    for rank in range(iteration + 1):
+        if ranks[rank]:
+            level = '    {rank = same;'
+            for node in ranks[rank]:
+                level += ' {};'.format(node)
+            level += '}\n'
+            tree += level
+
+    tree += '    // node colors\n'
+    style = '    {} [style="filled", fillcolor="{}"];\n'
+    for rank in range(iteration + 1):
+        if ranks[rank]:
+            tree += ''.join(style.format(node, colors[rank % len(colors)]) for node in ranks[rank])
+
+    tree += '  } /* closing subgraph */\n'
+    tree += '}\n'
+
+    f = open(filename, 'w')
+    f.write(tree)
+    f.close()
+# def generate_conflict_free_trees_dotfile(filename, network, trees, iteration)
 
 
 def test():
@@ -946,7 +1068,9 @@ def test():
     network.build_graph()
     topology, scan = compute_trees(network.adjacency_matrix, 16, 0.7, False, True)
     link_conflict_detection(topology, scan)
-    generate_trees_dotfile('kl_trees.dot', topology, scan)
+    conflict_trees = generate_trees_dotfile('kl_trees.dot', topology, scan)
+    trees, iteration = link_conflict_resolution(network, conflict_trees)
+    generate_conflict_free_trees_dotfile('final_kl_trees.dot', network, trees, iteration)
 
 
 if __name__ == '__main__':
