@@ -97,21 +97,23 @@ class Torus:
             f.close()
 
 
-    def allreduce_trees(self, alternate=False, binary=False):
+    def allreduce_trees(self, alternate=False, binary=False, verbose=False):
         # initialize empty trees
         trees = {}
         tree_nodes = {}
         for node in range(self.nodes):
             trees[node] = []
             tree_nodes[node] = [node]
-            #print('initialized tree {}: {}'.format(node, tree_nodes[node]))
+            if verbose:
+                print('initialized tree {}: {}'.format(node, tree_nodes[node]))
 
         # tree construction
         num_trees = 0
         iteration = 0
 
         while num_trees < self.nodes:
-            #print('iteration {}'.format(iteration))
+            if verbose:
+                print('iteration {}'.format(iteration))
             from_nodes = deepcopy(self.from_nodes)
             last_tree_nodes = deepcopy(tree_nodes)
 
@@ -129,21 +131,24 @@ class Torus:
                         turns += 1
                         root = turns % self.nodes
                         continue
-                    #p = (turns // self.nodes) % len(tree_nodes[root])
-                    #parent = tree_nodes[root][p]
-                    #print('turns: {}, root: {}, p: {}, parent: {}'.format(turns, root, p, parent))
+                    if verbose:
+                        p = (turns // self.nodes) % len(tree_nodes[root])
+                        parent = tree_nodes[root][p]
+                        print('turns: {}, root: {}, p: {}, parent: {}'.format(turns, root, p, parent))
 
                     for parent in last_tree_nodes[root]:
                         children = deepcopy(from_nodes[parent])
                         for child in children:
                             if child not in tree_nodes[root]:
-                                #print(' -- add node {} to tree {}'.format(child, root))
-                                #print('    before: {}'.format(trees[root]))
+                                if verbose:
+                                    print(' -- add node {} to tree {}'.format(child, root))
+                                    print('    before: {}'.format(trees[root]))
                                 from_nodes[parent].remove(child)
                                 tree_nodes[root].append(child)
                                 trees[root].append((child, parent, iteration))
-                                #print('    after : {}'.format(trees[root]))
-                                #print('    tree nodes: {}'.format(tree_nodes[root]))
+                                if verbose:
+                                    print('    after : {}'.format(trees[root]))
+                                    print('    tree nodes: {}'.format(tree_nodes[root]))
                                 changed = True
                                 break
                         if changed:
@@ -153,7 +158,8 @@ class Torus:
 
                     if len(tree_nodes[root]) == self.nodes:
                         num_trees += 1
-                        #print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
+                        if verbose:
+                            print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
                         if num_trees == self.nodes:
                             break
 
@@ -170,20 +176,25 @@ class Torus:
                         for child in children:
                             if binary and new_edges == 2:
                                 break
-                            #print(' child {}'.format(child))
+                            if verbose:
+                                print(' child {}'.format(child))
                             if child not in tree_nodes[root]:
-                                #print(' -- add node {} to tree {}'.format(child, root))
-                                #print('    before: {}'.format(trees[root]))
+                                if verbose:
+                                    print(' -- add node {} to tree {}'.format(child, root))
+                                    print('    before: {}'.format(trees[root]))
                                 from_nodes[parent].remove(child)
                                 tree_nodes[root].append(child)
                                 trees[root].append((child, parent, iteration))
-                                #print('    after : {}'.format(trees[root]))
-                                #print('    tree nodes: {}'.format(tree_nodes[root]))
+                                if verbose:
+                                    print('    after : {}'.format(trees[root]))
+                                    print('    tree nodes: {}'.format(tree_nodes[root]))
                                 new_edges += 1
                     if len(tree_nodes[root]) == self.nodes:
                         num_trees += 1
-                        #print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
-                    #print('  tree {}: {}'.format(root, trees[root]))
+                        if verbose:
+                            print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
+                    if verbose:
+                        print('  tree {}: {}'.format(root, trees[root]))
 
             iteration += 1
 
@@ -207,7 +218,6 @@ class Torus:
         tree = 'digraph tree {\n'
         tree += '  rankdir = BT;\n'
         tree += '  subgraph {\n'
-
 
         ranks = {}
         for rank in range(iteration + 1):
