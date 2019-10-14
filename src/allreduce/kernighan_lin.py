@@ -1016,53 +1016,6 @@ def link_conflict_resolution(network, conflict_trees, verbose=False):
 #def link_conflict_resolution(topology, scan, verbose=False)
 
 
-def generate_conflict_free_trees_dotfile(filename, network, trees, iteration):
-    colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#980043','#67001f']
-
-    tree = 'digraph tree {\n'
-    tree += '  rankdir = BT;\n'
-    tree += '  subgraph {\n'
-
-    ranks = {}
-    for rank in range(iteration + 1):
-        ranks[rank] = []
-
-    for root in range(network.nodes):
-        tree += '    /* tree {} */\n'.format(root)
-        ranks[0].append('"{}-{}"'.format(root, root))
-        for edge in trees[root]:
-            child = '"{}-{}"'.format(root, edge[0])
-            parent = '"{}-{}"'.format(root, edge[1])
-            cycle = iteration - edge[2]
-            if edge[2] + 1 not in ranks.keys():
-                print('iteration: {}, key: {}'.format(iteration, edge[2] + 1))
-            ranks[edge[2] + 1].append(child)
-            tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, cycle))
-
-    tree += '    // note that rank is used in the subgraph\n'
-    for rank in range(iteration + 1):
-        if ranks[rank]:
-            level = '    {rank = same;'
-            for node in ranks[rank]:
-                level += ' {};'.format(node)
-            level += '}\n'
-            tree += level
-
-    tree += '    // node colors\n'
-    style = '    {} [style="filled", fillcolor="{}"];\n'
-    for rank in range(iteration + 1):
-        if ranks[rank]:
-            tree += ''.join(style.format(node, colors[rank % len(colors)]) for node in ranks[rank])
-
-    tree += '  } /* closing subgraph */\n'
-    tree += '}\n'
-
-    f = open(filename, 'w')
-    f.write(tree)
-    f.close()
-# def generate_conflict_free_trees_dotfile(filename, network, trees, iteration)
-
-
 def test():
     network = networks.Torus(nodes=16, dimension=4)
     network.build_graph()
@@ -1070,7 +1023,7 @@ def test():
     link_conflict_detection(topology, scan)
     conflict_trees = generate_trees_dotfile('kl_trees.dot', topology, scan)
     trees, iteration = link_conflict_resolution(network, conflict_trees)
-    generate_conflict_free_trees_dotfile('final_kl_trees.dot', network, trees, iteration)
+    network.generate_trees_dotfile('final_kl_trees.dot', trees, iteration)
 
 
 if __name__ == '__main__':

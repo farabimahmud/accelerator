@@ -95,6 +95,7 @@ class Torus:
             f = open('torus_graph.dot', 'w')
             f.write(graph)
             f.close()
+    # def build_graph(self, generate_graph=False)
 
 
     def allreduce_trees(self, alternate=False, binary=False, verbose=False):
@@ -117,7 +118,9 @@ class Torus:
             from_nodes = deepcopy(self.from_nodes)
             last_tree_nodes = deepcopy(tree_nodes)
 
+            # alternating the link allocation every time for each tree
             if alternate:
+
                 changed = True
 
                 turns = 0
@@ -165,7 +168,8 @@ class Torus:
 
                     if turns % self.nodes != 0:
                         changed = True
-            else:
+
+            else:   # else case: allocating links for one tree as much as possble
                 for root in range(self.nodes):
                     if len(tree_nodes[root]) == self.nodes:
                         continue
@@ -198,19 +202,14 @@ class Torus:
 
             iteration += 1
 
-        print('Total iterations for network size of {}: {}'.format(self.nodes, iteration))
+        if verbose:
+            print('Total iterations for network size of {}: {}'.format(self.nodes, iteration))
 
-        #extension = 0
-        #directory = os.path.join('./trees')
-        #directory = os.path.abspath(directory)
+        return trees, iteration
+    # def allreduce_trees(self, alternate=False, binary=False, verbose=False)
 
-        #while os.path.exists('{}-{}'.format(directory, extension)):
-        #    extension += 1
 
-        #directory = '{}-{}'.format(directory, extension)
-
-        #os.makedirs(directory)
-
+    def generate_trees_dotfile(self, filename, trees, iteration):
         colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#980043','#67001f']
 
         tree = 'digraph tree {\n'
@@ -254,11 +253,10 @@ class Torus:
         tree += '  } /* closing subgraph */\n'
         tree += '}\n'
 
-        #f = open('{}/tree{}.dot'.format(directory, root), 'w')
-        f = open('trees.dot', 'w')
+        f = open(filename, 'w')
         f.write(tree)
         f.close()
-
+    # def generate_trees_dotfile(self, filename, trees, iteration)
 
 
 def main():
@@ -266,7 +264,8 @@ def main():
     nodes = dimension * dimension
     network = Torus(nodes=nodes, dimension=dimension)
     network.build_graph()
-    network.allreduce_trees(alternate=True, binary=False)
+    trees, iteration = network.allreduce_trees(alternate=True, binary=False)
+    network.generate_trees_dotfile('trees.dot', trees, iteration)
 
 if __name__ == '__main__':
     main()
