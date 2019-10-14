@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from copy import deepcopy
 
 class Torus:
@@ -8,9 +9,13 @@ class Torus:
         self.from_nodes = {}
         self.to_nodes = {}
         self.edges = []
+        self.adjacency_matrix = np.zeros((nodes, nodes))
 
 
     def build_graph(self, generate_graph=False):
+
+        link_weight = 2
+
         for node in range(self.nodes):
             self.from_nodes[node] = []
             self.to_nodes[node] = []
@@ -23,10 +28,14 @@ class Torus:
                 north = node + self.dimension * (self.dimension - 1)
                 self.from_nodes[node].append(north)
                 self.to_nodes[node].append(north)
+                self.adjacency_matrix[node][north] = link_weight
+                self.adjacency_matrix[north][node] = link_weight
             else:
                 north = node - self.dimension
                 self.from_nodes[node].append(north)
                 self.to_nodes[node].append(north)
+                self.adjacency_matrix[node][north] = link_weight
+                self.adjacency_matrix[north][node] = link_weight
 
             if row == self.dimension - 1:
                 south = node - self.dimension * (self.dimension - 1)
@@ -41,10 +50,14 @@ class Torus:
                 west = node + self.dimension - 1
                 self.from_nodes[node].append(west)
                 self.to_nodes[node].append(west)
+                self.adjacency_matrix[node][west] = link_weight
+                self.adjacency_matrix[west][node] = link_weight
             else:
                 west = node - 1
                 self.from_nodes[node].append(west)
                 self.to_nodes[node].append(west)
+                self.adjacency_matrix[node][west] = link_weight
+                self.adjacency_matrix[west][node] = link_weight
 
             if col == self.dimension - 1:
                 east = node - self.dimension + 1
@@ -82,27 +95,32 @@ class Torus:
             f = open('torus_graph.dot', 'w')
             f.write(graph)
             f.close()
+    # def build_graph(self, generate_graph=False)
 
 
-    def allreduce_trees(self, alternate=False, binary=False):
+    def allreduce_trees(self, alternate=False, binary=False, verbose=False):
         # initialize empty trees
         trees = {}
         tree_nodes = {}
         for node in range(self.nodes):
             trees[node] = []
             tree_nodes[node] = [node]
-            #print('initialized tree {}: {}'.format(node, tree_nodes[node]))
+            if verbose:
+                print('initialized tree {}: {}'.format(node, tree_nodes[node]))
 
         # tree construction
         num_trees = 0
         iteration = 0
 
         while num_trees < self.nodes:
-            #print('iteration {}'.format(iteration))
+            if verbose:
+                print('iteration {}'.format(iteration))
             from_nodes = deepcopy(self.from_nodes)
             last_tree_nodes = deepcopy(tree_nodes)
 
+            # alternating the link allocation every time for each tree
             if alternate:
+
                 changed = True
 
                 turns = 0
@@ -116,21 +134,24 @@ class Torus:
                         turns += 1
                         root = turns % self.nodes
                         continue
-                    #p = (turns // self.nodes) % len(tree_nodes[root])
-                    #parent = tree_nodes[root][p]
-                    #print('turns: {}, root: {}, p: {}, parent: {}'.format(turns, root, p, parent))
+                    if verbose:
+                        p = (turns // self.nodes) % len(tree_nodes[root])
+                        parent = tree_nodes[root][p]
+                        print('turns: {}, root: {}, p: {}, parent: {}'.format(turns, root, p, parent))
 
                     for parent in last_tree_nodes[root]:
                         children = deepcopy(from_nodes[parent])
                         for child in children:
                             if child not in tree_nodes[root]:
-                                #print(' -- add node {} to tree {}'.format(child, root))
-                                #print('    before: {}'.format(trees[root]))
+                                if verbose:
+                                    print(' -- add node {} to tree {}'.format(child, root))
+                                    print('    before: {}'.format(trees[root]))
                                 from_nodes[parent].remove(child)
                                 tree_nodes[root].append(child)
                                 trees[root].append((child, parent, iteration))
-                                #print('    after : {}'.format(trees[root]))
-                                #print('    tree nodes: {}'.format(tree_nodes[root]))
+                                if verbose:
+                                    print('    after : {}'.format(trees[root]))
+                                    print('    tree nodes: {}'.format(tree_nodes[root]))
                                 changed = True
                                 break
                         if changed:
@@ -140,13 +161,15 @@ class Torus:
 
                     if len(tree_nodes[root]) == self.nodes:
                         num_trees += 1
-                        #print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
+                        if verbose:
+                            print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
                         if num_trees == self.nodes:
                             break
 
                     if turns % self.nodes != 0:
                         changed = True
-            else:
+
+            else:   # else case: allocating links for one tree as much as possble
                 for root in range(self.nodes):
                     if len(tree_nodes[root]) == self.nodes:
                         continue
@@ -157,58 +180,60 @@ class Torus:
                         for child in children:
                             if binary and new_edges == 2:
                                 break
-                            #print(' child {}'.format(child))
+                            if verbose:
+                                print(' child {}'.format(child))
                             if child not in tree_nodes[root]:
-                                #print(' -- add node {} to tree {}'.format(child, root))
-                                #print('    before: {}'.format(trees[root]))
+                                if verbose:
+                                    print(' -- add node {} to tree {}'.format(child, root))
+                                    print('    before: {}'.format(trees[root]))
                                 from_nodes[parent].remove(child)
                                 tree_nodes[root].append(child)
                                 trees[root].append((child, parent, iteration))
-                                #print('    after : {}'.format(trees[root]))
-                                #print('    tree nodes: {}'.format(tree_nodes[root]))
+                                if verbose:
+                                    print('    after : {}'.format(trees[root]))
+                                    print('    tree nodes: {}'.format(tree_nodes[root]))
                                 new_edges += 1
                     if len(tree_nodes[root]) == self.nodes:
                         num_trees += 1
-                        #print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
-                    #print('  tree {}: {}'.format(root, trees[root]))
+                        if verbose:
+                            print('iteration {} - tree {} constructed: {}'.format(iteration, root, trees[root]))
+                    if verbose:
+                        print('  tree {}: {}'.format(root, trees[root]))
 
             iteration += 1
 
-        print('Total iterations for network size of {}: {}'.format(self.nodes, iteration))
+        if verbose:
+            print('Total iterations for network size of {}: {}'.format(self.nodes, iteration))
 
-        #extension = 0
-        #directory = os.path.join('./trees')
-        #directory = os.path.abspath(directory)
+        return trees, iteration
+    # def allreduce_trees(self, alternate=False, binary=False, verbose=False)
 
-        #while os.path.exists('{}-{}'.format(directory, extension)):
-        #    extension += 1
 
-        #directory = '{}-{}'.format(directory, extension)
-
-        #os.makedirs(directory)
-
+    def generate_trees_dotfile(self, filename, trees, iteration):
         colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#980043','#67001f']
-        #colors = ['#ffffcc','#c7e9b4','#7fcdbb','#41b6c4','#2c7fb8','#253494']
-        #colors = ['#f1eef6','#d4b9da','#c994c7','#df65b0','#dd1c77','#980043']
 
         tree = 'digraph tree {\n'
         tree += '  rankdir = BT;\n'
         tree += '  subgraph {\n'
 
-
         ranks = {}
+        node_rank = {}
         for rank in range(iteration + 1):
             ranks[rank] = []
 
         for root in range(self.nodes):
             tree += '    /* tree {} */\n'.format(root)
             ranks[0].append('"{}-{}"'.format(root, root))
+            node_rank['"{}-{}"'.format(root, root)] = 0
             for edge in trees[root]:
                 child = '"{}-{}"'.format(root, edge[0])
                 parent = '"{}-{}"'.format(root, edge[1])
                 cycle = iteration - edge[2]
-                ranks[edge[2] + 1].append(child)
-                tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, cycle))
+                rank = edge[2] + 1
+                ranks[rank].append(child)
+                node_rank[child] = edge[2] + 1
+                minlen = rank - node_rank[parent]
+                tree += ''.join('    {} -> {} [ label="{}" minlen={} ];\n'.format(child, parent, cycle, minlen))
 
         tree += '    // note that rank is used in the subgraph\n'
         for rank in range(iteration + 1):
@@ -228,11 +253,10 @@ class Torus:
         tree += '  } /* closing subgraph */\n'
         tree += '}\n'
 
-        #f = open('{}/tree{}.dot'.format(directory, root), 'w')
-        f = open('trees.dot', 'w')
+        f = open(filename, 'w')
         f.write(tree)
         f.close()
-
+    # def generate_trees_dotfile(self, filename, trees, iteration)
 
 
 def main():
@@ -240,7 +264,8 @@ def main():
     nodes = dimension * dimension
     network = Torus(nodes=nodes, dimension=dimension)
     network.build_graph()
-    network.allreduce_trees(alternate=True, binary=True)
+    trees, iteration = network.allreduce_trees(alternate=True, binary=False)
+    network.generate_trees_dotfile('trees.dot', trees, iteration)
 
 if __name__ == '__main__':
     main()
