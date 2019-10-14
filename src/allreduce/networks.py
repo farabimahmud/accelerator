@@ -212,26 +212,29 @@ class Torus:
         #os.makedirs(directory)
 
         colors = ['#f7f4f9','#e7e1ef','#d4b9da','#c994c7','#df65b0','#e7298a','#ce1256','#980043','#67001f']
-        #colors = ['#ffffcc','#c7e9b4','#7fcdbb','#41b6c4','#2c7fb8','#253494']
-        #colors = ['#f1eef6','#d4b9da','#c994c7','#df65b0','#dd1c77','#980043']
 
         tree = 'digraph tree {\n'
         tree += '  rankdir = BT;\n'
         tree += '  subgraph {\n'
 
         ranks = {}
+        node_rank = {}
         for rank in range(iteration + 1):
             ranks[rank] = []
 
         for root in range(self.nodes):
             tree += '    /* tree {} */\n'.format(root)
             ranks[0].append('"{}-{}"'.format(root, root))
+            node_rank['"{}-{}"'.format(root, root)] = 0
             for edge in trees[root]:
                 child = '"{}-{}"'.format(root, edge[0])
                 parent = '"{}-{}"'.format(root, edge[1])
                 cycle = iteration - edge[2]
-                ranks[edge[2] + 1].append(child)
-                tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, cycle))
+                rank = edge[2] + 1
+                ranks[rank].append(child)
+                node_rank[child] = edge[2] + 1
+                minlen = rank - node_rank[parent]
+                tree += ''.join('    {} -> {} [ label="{}" minlen={} ];\n'.format(child, parent, cycle, minlen))
 
         tree += '    // note that rank is used in the subgraph\n'
         for rank in range(iteration + 1):
@@ -263,7 +266,7 @@ def main():
     nodes = dimension * dimension
     network = Torus(nodes=nodes, dimension=dimension)
     network.build_graph()
-    network.allreduce_trees(alternate=True, binary=True)
+    network.allreduce_trees(alternate=True, binary=False)
 
 if __name__ == '__main__':
     main()
