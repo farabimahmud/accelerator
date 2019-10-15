@@ -1,7 +1,7 @@
 import numpy as np
 import random
 from copy import deepcopy
-
+random.seed(99)
 import networks
 from allreduce import Allreduce
 
@@ -24,7 +24,7 @@ class MXNetTreeAllreduce(Allreduce):
                 False - allocating links for one tree as much as possble
     @verbose: print detailed info of tree construction process
     '''
-    def compute_trees(self, kary, alternate=False, verbose=False):
+    def compute_trees(self, kary, alternate=True, verbose=False):
         for root in range(self.network.nodes):
             self.topology.append([])
             self.scan.append([])
@@ -40,7 +40,7 @@ class MXNetTreeAllreduce(Allreduce):
 
         self.generate_conflict_trees()
         self.link_conflict_resolution(alternate, verbose)
-    # def compute_trees(self, kary, alternate=False, verbose=False)
+    # def compute_trees(self, kary, alternate=True, verbose=False)
 
 
     '''
@@ -958,6 +958,9 @@ class MXNetTreeAllreduce(Allreduce):
 
     '''
     link_conflict_resolution() - resolve conflicts and generate trees
+    @alternate: Ture - allocate the links by alternating trees every allocation
+                False - allocating links for one tree as much as possble
+    @verbose: print detailed info of tree construction process
     '''
     def link_conflict_resolution(self, alternate=True, verbose=False):
         if verbose:
@@ -1009,6 +1012,8 @@ class MXNetTreeAllreduce(Allreduce):
                             if parent not in tree_level_nodes[root][self.iterations]:
                                 tree_level_nodes[root][self.iterations].append(parent)
                             self.conflict_trees[root][0].remove((child, parent))
+                            if alternate:
+                                break
                 if len(self.conflict_trees[root][0]) == 0:
                     self.conflict_trees[root].pop(0)
                 if len(tree_nodes[root]) == self.network.nodes:
@@ -1032,7 +1037,7 @@ def test():
     network = networks.Torus(nodes, dimension)
     network.build_graph()
     allreduce = MXNetTreeAllreduce(network)
-    allreduce.compute_trees(2);
+    allreduce.compute_trees(2, alternate=True);
     allreduce.generate_trees_dotfile('mxnettree.dot')
     print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
 
