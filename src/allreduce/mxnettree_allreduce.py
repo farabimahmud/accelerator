@@ -38,7 +38,7 @@ class MXNetTreeAllreduce(Allreduce):
 
             self.link_conflict_detection()
 
-        self.generate_conflict_trees('conflict_mxnettree.dot')
+        self.generate_conflict_trees()
         self.link_conflict_resolution(alternate, verbose)
     # def compute_trees(self, kary, alternate=False, verbose=False)
 
@@ -1034,6 +1034,7 @@ def test():
     allreduce = MXNetTreeAllreduce(network)
     allreduce.compute_trees(2);
     allreduce.generate_trees_dotfile('mxnettree.dot')
+    print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
 
 
 if __name__ == '__main__':

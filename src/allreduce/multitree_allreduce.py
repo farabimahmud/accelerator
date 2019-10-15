@@ -17,7 +17,7 @@ class MultiTreeAllreduce(Allreduce):
                 False - allocating links for one tree as much as possble
     @verbose: print detailed info of tree construction process
     '''
-    def compute_trees(self, kary, alternate=False, verbose=False):
+    def compute_trees(self, kary, alternate=True, verbose=False):
         assert kary > 1
 
         # initialize empty trees
@@ -44,6 +44,12 @@ class MultiTreeAllreduce(Allreduce):
 
                 changed = True
 
+                new_edges = {}
+                for root in range(self.network.nodes):
+                    new_edges[root] = {}
+                    for parent in last_tree_nodes[root]:
+                        new_edges[root][parent] = 0
+
                 turns = 0
                 while changed:
                     changed = False
@@ -62,8 +68,11 @@ class MultiTreeAllreduce(Allreduce):
 
                     for parent in last_tree_nodes[root]:
                         children = deepcopy(from_nodes[parent])
+                        if new_edges[root][parent] == kary - 1:
+                            continue
                         for child in children:
                             if child not in tree_nodes[root]:
+                                new_edges[root][parent] += 1
                                 if verbose:
                                     print(' -- add node {} to tree {}'.format(child, root))
                                     print('    before: {}'.format(self.trees[root]))
@@ -134,8 +143,9 @@ def test():
     network = networks.Torus(nodes, dimension)
     network.build_graph()
     allreduce = MultiTreeAllreduce(network)
-    allreduce.compute_trees(2);
+    allreduce.compute_trees(2, alternate=True);
     allreduce.generate_trees_dotfile('multitree.dot')
+    print('MultiTreeAllreduce takes {} iterations'.format(allreduce.iterations))
 
 
 if __name__ == '__main__':
