@@ -44,11 +44,11 @@ class MultiTreeAllreduce(Allreduce):
 
                 changed = True
 
-                new_edges = {}
+                num_new_children = {}
                 for root in range(self.network.nodes):
-                    new_edges[root] = {}
+                    num_new_children[root] = {}
                     for parent in last_tree_nodes[root]:
-                        new_edges[root][parent] = 0
+                        num_new_children[root][parent] = 0
 
                 turns = 0
                 while changed:
@@ -68,11 +68,11 @@ class MultiTreeAllreduce(Allreduce):
 
                     for parent in last_tree_nodes[root]:
                         children = deepcopy(from_nodes[parent])
-                        if new_edges[root][parent] == kary - 1:
+                        if num_new_children[root][parent] == kary - 1:
                             continue
                         for child in children:
                             if child not in tree_nodes[root]:
-                                new_edges[root][parent] += 1
+                                num_new_children[root][parent] += 1
                                 if verbose:
                                     print(' -- add node {} to tree {}'.format(child, root))
                                     print('    before: {}'.format(self.trees[root]))
@@ -106,9 +106,9 @@ class MultiTreeAllreduce(Allreduce):
                     current_tree_nodes = deepcopy(tree_nodes[root])
                     for p, parent in enumerate(current_tree_nodes):
                         children = deepcopy(from_nodes[parent])
-                        new_edges = 0
+                        num_new_children = 0
                         for child in children:
-                            if new_edges == kary - 1:
+                            if num_new_children == kary - 1:
                                 break
                             if verbose:
                                 print(' child {}'.format(child))
@@ -122,7 +122,7 @@ class MultiTreeAllreduce(Allreduce):
                                 if verbose:
                                     print('    after : {}'.format(self.trees[root]))
                                     print('    tree nodes: {}'.format(tree_nodes[root]))
-                                new_edges += 1
+                                num_new_children += 1
                     if len(tree_nodes[root]) == self.network.nodes:
                         num_trees += 1
                         if verbose:
