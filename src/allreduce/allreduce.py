@@ -11,7 +11,7 @@ class Allreduce(ABC):
     compute_trees() - computes allreduce spanning trees for the given network
     '''
     @abstractmethod
-    def compute_trees(self, kary, alternate=False, verbose=False):
+    def compute_trees(self, kary, alternate=False, sort=True, verbose=False):
         pass
 
 
