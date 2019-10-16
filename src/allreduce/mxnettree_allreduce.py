@@ -32,14 +32,17 @@ class MXNetTreeAllreduce(Allreduce):
             self.scan[root].append(0)
             self.compute_tree_from_root(root)
 
+        filename = None
         if verbose:
             for root in range(self.network.nodes):
                 self.print_topo("\nTree {}".format(root), self.topology[root], self.scan[root])
 
             self.link_conflict_detection()
 
-        self.generate_conflict_trees()
-        self.link_conflict_resolution(alternate, verbose)
+            filename = 'conflict_trees.dot'
+
+        self.generate_conflict_trees(filename)
+        self.link_conflict_resolution(kary, alternate, verbose)
     # def compute_trees(self, kary, alternate=True, verbose=False)
 
 
@@ -962,7 +965,9 @@ class MXNetTreeAllreduce(Allreduce):
                 False - allocating links for one tree as much as possble
     @verbose: print detailed info of tree construction process
     '''
-    def link_conflict_resolution(self, alternate=True, verbose=False):
+    def link_conflict_resolution(self, kary, alternate=True, verbose=False):
+        assert kary > 1
+
         if verbose:
             print('Conflict trees:')
             for root in range(self.network.nodes):
@@ -983,8 +988,11 @@ class MXNetTreeAllreduce(Allreduce):
         num_trees = 0
         self.iterations = 0
 
-        #root = 0
         from_nodes = deepcopy(self.network.from_nodes)
+
+        num_new_children = {}
+        for root in range(self.network.nodes):
+            num_new_children[root] = {}
 
         if verbose:
             print('iteration {}'.format(self.iterations))
@@ -1000,9 +1008,12 @@ class MXNetTreeAllreduce(Allreduce):
                 child_parent_row = self.conflict_trees[root][0]
                 for (child, parent) in child_parent_row:
                     print(' try to add edge {}->{} to tree {}'.format(child, parent, root))
-                    if child not in tree_level_nodes[root][self.iterations] and \
-                            parent not in tree_level_nodes[root][self.iterations]:
-                        if child in from_nodes[parent]:
+                    if child in from_nodes[parent]:
+                        if parent not in num_new_children[root].keys():
+                            num_new_children[root][parent] = 0
+                        if parent not in tree_level_nodes[root][self.iterations] and \
+                                num_new_children[root][parent] < kary - 1:
+                            num_new_children[root][parent] += 1
                             assert(child not in tree_nodes[root])
                             change = True
                             if verbose:
@@ -1015,28 +1026,30 @@ class MXNetTreeAllreduce(Allreduce):
                             if verbose:
                                 print('    after : {}'.format(self.trees[root]))
                                 print('    tree nodes: {}'.format(tree_nodes[root]))
-                            if parent not in tree_level_nodes[root][self.iterations]:
-                                tree_level_nodes[root][self.iterations].append(parent)
                             self.conflict_trees[root][0].remove((child, parent))
                             if alternate:
                                 break
                         else:
-                            print(' ** link {}->{} not avaliable'.format(child, parent))
+                            if child in tree_level_nodes[root][self.iterations] and \
+                                    parent in tree_level_nodes[root][self.iterations]:
+                                print(' ** both parent {} and child {} already added in this iteration'.format(parent, child))
+                            elif num_new_children[root][parent] == kary - 1:
+                                print(' ** reach kary {} for parent {}'.format(num_new_children[root][parent]+1, parent))
+                            elif child in tree_level_nodes[root][self.iterations]:
+                                print(' ** child {} already added in this iteration'.format(child))
+                            else:
+                                assert parent in tree_level_nodes[root][self.iterations]
+                                print(' ** parent {} already added in this iteration'.format(parent))
                     else:
-                        if child in tree_level_nodes[root][self.iterations] and \
-                                parent in tree_level_nodes[root][self.iterations]:
-                            print(' ** both parent {} and child {} already added in this iteration'.format(parent, child))
-                        elif child in tree_level_nodes[root][self.iterations]:
-                            print(' ** child {} already added in this iteration'.format(child))
-                        else:
-                            assert parent in tree_level_nodes[root][self.iterations]
-                            print(' ** parent {} already added in this iteration'.format(parent))
+                        print(' ** link {}->{} not avaliable'.format(child, parent))
+
                 if len(self.conflict_trees[root][0]) == 0:
                     self.conflict_trees[root].pop(0)
                 if len(tree_nodes[root]) == self.network.nodes:
                     num_trees += 1
                     if verbose:
-                        print('iteration {} - tree {} constructed: {}'.format(self.iterations, root, self.trees[root]))
+                        print('iteration {} - tree {} constructed: {}'.format(
+                            self.iterations, root, self.trees[root]))
 
             if not change:
                 from_nodes = deepcopy(self.network.from_nodes)
@@ -1045,9 +1058,10 @@ class MXNetTreeAllreduce(Allreduce):
                     print('iteration {}'.format(self.iterations))
                 for root in range(self.network.nodes):
                     tree_level_nodes[root][self.iterations] = []
+                    num_new_children[root] = {}
 
         self.iterations += 1
-    #def link_conflict_resolution(self, alternative=True, verbose=False)
+    #def link_conflict_resolution(self, kary, alternative=True, verbose=False)
 
 
 def test():
@@ -1055,8 +1069,10 @@ def test():
     nodes = dimension * dimension
     network = networks.Torus(nodes, dimension)
     network.build_graph()
+
+    kary = 2
     allreduce = MXNetTreeAllreduce(network)
-    allreduce.compute_trees(2, alternate=True, verbose=True)
+    allreduce.compute_trees(kary, alternate=True, verbose=True)
     allreduce.generate_trees_dotfile('mxnettree.dot')
     print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
 
