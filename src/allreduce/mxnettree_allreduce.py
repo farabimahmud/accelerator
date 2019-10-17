@@ -11,10 +11,10 @@ class MXNetTreeAllreduce(Allreduce):
         super().__init__(network)
         self.alpha = 0.7    # link usage penalty
         self.backtrack = False   # whether or not to use backtracking to generate trees
-        self.topology = []   # topology stores the generated (maybe) link-conflict trees
-        self.scan = []       # scan stores the start of each level of each conflict tree
+        self.topology = None   # topology stores the generated (maybe) link-conflict trees
+        self.scan = None       # scan stores the start of each level of each conflict tree
         self.conflict_trees = None
-        self.adjacency_matrix = deepcopy(self.network.adjacency_matrix)
+        self.adjacency_matrix = None #deepcopy(self.network.adjacency_matrix)
 
 
     '''
@@ -22,9 +22,15 @@ class MXNetTreeAllreduce(Allreduce):
     @kary: useless, skip
     @alternate: Ture - allocate the links by alternating trees every allocation
                 False - allocating links for one tree as much as possble
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
     @verbose: print detailed info of tree construction process
     '''
     def compute_trees(self, kary, alternate=True, sort=True, verbose=False):
+        self.topology = []
+        self.scan = []
+        self.adjacency_matrix = deepcopy(self.network.adjacency_matrix)
+
         for root in range(self.network.nodes):
             self.topology.append([])
             self.scan.append([])
@@ -42,7 +48,7 @@ class MXNetTreeAllreduce(Allreduce):
             filename = 'conflict_trees.dot'
 
         self.generate_conflict_trees(filename)
-        self.topdown_schedule(kary, alternate=alternate, cross_level=True, verbose=verbose)
+        self.topdown_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
     # def compute_trees(self, kary, alternate=True, verbose=False)
 
 
@@ -965,6 +971,8 @@ class MXNetTreeAllreduce(Allreduce):
                 False - allocating links for one tree as much as possble
     @cross_level: allocate links from children levels even some nodes at parent
                   level are not scheduled, but should not have dependency on those
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
     @verbose: print detailed info of tree construction process
 
     desc - schedule the communications in time steps by allocating links using top-down
@@ -973,7 +981,7 @@ class MXNetTreeAllreduce(Allreduce):
            of conflicts (Note that higher level of trees are more sparse in terms of link
            usage).
     '''
-    def topdown_schedule(self, kary, alternate=True, cross_level=True, verbose=False):
+    def topdown_schedule(self, kary, alternate=True, cross_level=True, sort=True, verbose=False):
         assert kary > 1
 
         if verbose:
@@ -1016,11 +1024,16 @@ class MXNetTreeAllreduce(Allreduce):
         if verbose:
             print('iteration {}'.format(self.iterations))
 
+        # sort the roots based on link conflicts during allocation
+        sorted_roots = list(range(self.network.nodes))
+        conflicts = [0] * self.network.nodes
+
         while num_trees < self.network.nodes:
 
             change = False
 
-            for root in range(self.network.nodes):
+            #for root in range(self.network.nodes):
+            for root in sorted_roots:
                 if len(tree_nodes[root]) == self.network.nodes:
                     continue
 
@@ -1060,6 +1073,7 @@ class MXNetTreeAllreduce(Allreduce):
                             if alternate:
                                 break
                         else:
+                            #conflicts[root] += 1
                             if verbose:
                                 if num_new_children[root][parent] == kary - 1:
                                     print(' ** reach kary {} for parent {}'.format(num_new_children[root][parent]+1, parent))
@@ -1069,6 +1083,7 @@ class MXNetTreeAllreduce(Allreduce):
                                     assert parent in tree_level_nodes[root][self.iterations]
                                     print(' ** child {} already added in this iteration'.format(child))
                     else:
+                        conflicts[root] += 1
                         if verbose:
                             print(' ** link {}->{} not avaliable'.format(child, parent))
 
@@ -1082,6 +1097,13 @@ class MXNetTreeAllreduce(Allreduce):
                     if verbose:
                         print('iteration {} - tree {} constructed: {}'.format(
                             self.iterations, root, self.trees[root]))
+
+            if sort:
+                #print('before sorting: {}'.format(sorted_roots))
+                #print('conflicts: {}'.format(conflicts))
+                sorted_roots = [root for _ , root in sorted(zip(conflicts, sorted_roots), reverse=True)]
+                conflicts = [0] * self.network.nodes
+                #print('after sorting: {}'.format(sorted_roots))
 
             if not change:
                 from_nodes = deepcopy(self.network.from_nodes)
@@ -1116,9 +1138,32 @@ def test():
 
     kary = 2
     allreduce = MXNetTreeAllreduce(network)
-    allreduce.compute_trees(kary, alternate=True, verbose=False)
-    allreduce.generate_trees_dotfile('mxnettree.dot')
-    print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+    begin_seed = 99
+    end_seed = 100
+    # NOTE: It seems sorted won't help much due to random picks to break ties in the during KL algorithm.
+    #       Sometimes better and sometimes worse, most of the time are same. Seed 47 run forever, buggy!
+    #       For example, random seed 8 makes it worse and random seed 9 makes it better. The hypothesis
+    #       is that the limitation is inherent in the decoupling of tree construction and scheduling.
+    for seed in range(begin_seed, end_seed):
+        #print('seed: {}'.format(seed))
+        random.seed(seed)
+        allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
+        allreduce.generate_trees_dotfile('mxnettree.dot')
+        iterations = allreduce.iterations
+        #print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+        random.seed(seed)
+        allreduce.compute_trees(kary, alternate=True, sort=True, verbose=False)
+        allreduce.generate_trees_dotfile('mxnettree_sorted.dot')
+        sort_iterations = allreduce.iterations
+        #print('MXNetTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
+        if iterations > sort_iterations:
+            compare = 'Worse'
+        elif iterations == sort_iterations:
+            compare = 'Same'
+        else:
+            compare = 'Better'
+        print('Seed {}: MXNetTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
+            seed, iterations, sort_iterations, compare))
 
 
 if __name__ == '__main__':
