@@ -160,15 +160,25 @@ def test():
     network = networks.Torus(nodes, dimension)
     network.build_graph()
 
-    kary = 4
+    kary = 5
     allreduce = MultiTreeAllreduce(network)
+    # NOTE: sorted doesn't help for multitree since it only considers available links
     allreduce.compute_trees(kary, alternate=True, sort=False)
     allreduce.generate_trees_dotfile('multitree.dot')
-    print('MultiTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+    iterations = allreduce.iterations
+    #print('MultiTreeAllreduce takes {} iterations'.format(allreduce.iterations))
     allreduce.compute_trees(kary, alternate=True, sort=True)
-    allreduce.generate_trees_dotfile('multitree_sorted.dot')
-    print('MultiTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
-    # NOTE: sorted doesn't help for multitree since it only considers available links
+    allreduce.generate_trees_dotfile('multitree_sort.dot')
+    sort_iterations = allreduce.iterations
+    #print('MultiTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
+    if iterations > sort_iterations:
+        compare = 'Worse'
+    elif iterations == sort_iterations:
+        compare = 'Same'
+    else:
+        compare = 'Better'
+    print('MultiTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
+        iterations, sort_iterations, compare))
 
 
 if __name__ == '__main__':

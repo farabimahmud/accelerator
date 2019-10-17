@@ -1153,7 +1153,7 @@ def test():
         #print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
         random.seed(seed)
         allreduce.compute_trees(kary, alternate=True, sort=True, verbose=False)
-        allreduce.generate_trees_dotfile('mxnettree_sorted.dot')
+        allreduce.generate_trees_dotfile('mxnettree_sort.dot')
         sort_iterations = allreduce.iterations
         #print('MXNetTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
         if iterations > sort_iterations:
