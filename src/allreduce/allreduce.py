@@ -36,17 +36,24 @@ class Allreduce(ABC):
             ranks[rank] = []
 
         for root in range(self.network.nodes):
+            minrank = self.iterations
+            for edge in self.trees[root]:
+                child = '"{}-{}"'.format(root, edge[0])
+                rank = edge[2] + 1
+                ranks[rank].append(child)
+                node_rank[child] = rank
+                if edge[1] == root and rank - 1 < minrank:
+                    minrank = rank - 1
+            ranks[minrank].append('"{}-{}"'.format(root, root))
+            node_rank['"{}-{}"'.format(root, root)] = minrank
+
+        for root in range(self.network.nodes):
             tree += '    /* tree {} */\n'.format(root)
-            ranks[0].append('"{}-{}"'.format(root, root))
-            node_rank['"{}-{}"'.format(root, root)] = 0
             for edge in self.trees[root]:
                 child = '"{}-{}"'.format(root, edge[0])
                 parent = '"{}-{}"'.format(root, edge[1])
                 cycle = self.iterations - edge[2]
-                rank = edge[2] + 1
-                ranks[rank].append(child)
-                node_rank[child] = edge[2] + 1
-                minlen = rank - node_rank[parent] # for strict separation of ranks
+                minlen = node_rank[child] - node_rank[parent] # for strict separation of ranks
                 tree += ''.join('    {} -> {} [ label="{}" minlen={} ];\n'.format(child, parent, cycle, minlen))
 
         tree += '    // note that rank is used in the subgraph\n'

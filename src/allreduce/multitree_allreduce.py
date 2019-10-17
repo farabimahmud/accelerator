@@ -172,11 +172,11 @@ def test():
     sort_iterations = allreduce.iterations
     #print('MultiTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
     if iterations > sort_iterations:
-        compare = 'Worse'
+        compare = 'Better'
     elif iterations == sort_iterations:
         compare = 'Same'
     else:
-        compare = 'Better'
+        compare = 'Worse'
     print('MultiTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
         iterations, sort_iterations, compare))
 
