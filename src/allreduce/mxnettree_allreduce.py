@@ -26,7 +26,7 @@ class MXNetTreeAllreduce(Allreduce):
            last allocation iteration
     @verbose: print detailed info of tree construction process
     '''
-    def compute_trees(self, kary, alternate=True, sort=True, verbose=False):
+    def compute_trees(self, kary, alternate=True, sort=False, verbose=False):
         self.topology = []
         self.scan = []
         self.adjacency_matrix = deepcopy(self.network.adjacency_matrix)
@@ -798,7 +798,8 @@ class MXNetTreeAllreduce(Allreduce):
     @depth: number of levels of binary tree
     '''
     def compute_depth(self):
-        for depth in range(self.network.nodes):
+        n = self.network.nodes
+        for depth in range(n):
             num = 2 << depth
             if n <= num:
                 return depth + 1
