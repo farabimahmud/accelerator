@@ -1086,7 +1086,7 @@ inline void ComputeTreesFromRoot(std::vector<T>* W,
 
   bool success = true;
   if (reset == 1) {
-    std::cout << "No valid binary tree found from root " << root << ", try backtracking";
+    std::cout << "No valid binary tree found from root " << root << ", try backtracking" << std::endl;
     success = BacktrackGenerateBinaryTree(W, num_elements, root, topo, scan);
   } else {
     *topo = topo_temp;
@@ -1096,7 +1096,7 @@ inline void ComputeTreesFromRoot(std::vector<T>* W,
   if (success)
     UpdateWeight(W, *topo, num_elements, alpha);
   else
-    std::cerr << "No valid binary tree found from root " << root << " using backtracking";
+    std::cerr << "No valid binary tree found from root " << root << " using backtracking" << std::endl;
 }
 
 /**
