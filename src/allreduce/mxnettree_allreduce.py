@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import random
 from copy import deepcopy
@@ -375,7 +376,7 @@ class MXNetTreeAllreduce(Allreduce):
     def backtrack_generate_binary_tree(self, root):
         # Clear before starting
         self.topology[root].clear()
-        self.topology[root].clear()
+        self.scan[root].clear()
 
         # Compute depth
         # num_elemennts: depth
@@ -400,9 +401,9 @@ class MXNetTreeAllreduce(Allreduce):
         # For larger number of accelerators, settle for first tree found (non-optimal),
         # but this saves a lot of runtime since Backtrack is exponential time
         if depth <= 3:
-            result_weight = self.iterative_backtrack(state, result, result_weight, depth, True)
+            result_weight, result = self.iterative_backtrack(state, result, result_weight, depth, True)
         else:
-            result_weight = self.iterative_backtrack(state, result, result_weight, depth, False)
+            result_weight, result = self.iterative_backtrack(state, result, result_weight, depth, False)
 
         success = self.form_topology(result, root, depth)
 
@@ -472,7 +473,7 @@ class MXNetTreeAllreduce(Allreduce):
                 state[len(state_stack)] = -1
                 row -= 1
 
-        return best_result_weight
+        return best_result_weight, best_result
     # def iterative_backtrack(state, best_result, best_result_weight, depth, optimal):
 
 
@@ -664,13 +665,9 @@ class MXNetTreeAllreduce(Allreduce):
         for i in range(depth, -1, -1):
             stride = 1 << i
             for j in range(0, len(result), stride):
-                from_node = resullt[j]
+                from_node = result[j]
                 self.topology[root].append(from_node)
             self.scan[root].append(len(self.topology[root]))
-
-        # Insert at the end, result vector
-        self.topology[root].append(result)
-        self.scan[root].append(len(self.topology[root]))
 
         return success
     # def form_topology(self, result, root, depth)
@@ -1314,14 +1311,15 @@ class MXNetTreeAllreduce(Allreduce):
     #def topdown_schedule(self, kary, alternative=True, cross_level=True, verbose=False)
 
 
-def test():
-    dimension = 4
+def test(args):
+    dimension = args.dimension
     nodes = dimension * dimension
     network = networks.Torus(nodes, dimension)
     network.build_graph()
 
-    kary = 2
+    kary = args.kary
     allreduce = MXNetTreeAllreduce(network)
+    allreduce.backtrack = args.backtrack
     begin_seed = 99
     end_seed = 100
     # NOTE: It seems sorted won't help much due to random picks to break ties in the during KL algorithm.
@@ -1334,7 +1332,9 @@ def test():
         allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
         allreduce.generate_trees_dotfile('mxnettree.dot')
         iterations = allreduce.iterations
-        #print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+        if allreduce.backtrack:
+            print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+            continue
         random.seed(seed)
         allreduce.compute_trees(kary, alternate=True, sort=True, verbose=False)
         allreduce.generate_trees_dotfile('mxnettree_sort.dot')
@@ -1351,4 +1351,15 @@ def test():
 
 
 if __name__ == '__main__':
-    test()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dimension', default=4, type=int,
+                        help='network dimension, default is 4')
+    parser.add_argument('--kary', default=2, type=int,
+                        help='generay kary tree, default is 2 (binary)')
+    parser.add_argument('--backtrack', default=False, action='store_true',
+                        help='use backtracking only, default is False')
+
+    args = parser.parse_args()
+
+    test(args)
