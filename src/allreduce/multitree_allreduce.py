@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 from copy import deepcopy
 
@@ -154,13 +155,13 @@ class MultiTreeAllreduce(Allreduce):
     # def compute_trees(self, kary, alternate=False, sort=True, verbose=False)
 
 
-def test():
-    dimension = 4
+def test(args):
+    dimension = args.dimension
     nodes = dimension * dimension
     network = networks.Torus(nodes, dimension)
     network.build_graph()
 
-    kary = 5
+    kary = args.kary
     allreduce = MultiTreeAllreduce(network)
     # NOTE: sorted doesn't help for multitree since it only considers available links
     allreduce.compute_trees(kary, alternate=True, sort=False)
@@ -182,4 +183,13 @@ def test():
 
 
 if __name__ == '__main__':
-    test()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dimension', default=4, type=int,
+                        help='network dimension, default is 4')
+    parser.add_argument('--kary', default=2, type=int,
+                        help='generay kary tree, default is 2 (binary)')
+
+    args = parser.parse_args()
+
+    test(args)
