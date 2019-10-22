@@ -16,6 +16,8 @@ class MXNetTreeAllreduce(Allreduce):
         self.scan = None       # scan stores the start of each level of each conflict tree
         self.conflict_trees = None
         self.adjacency_matrix = None #deepcopy(self.network.adjacency_matrix)
+        self.mxnet_maxdepth = 16
+        self.silent = False
 
 
     '''
@@ -46,8 +48,10 @@ class MXNetTreeAllreduce(Allreduce):
 
             self.link_conflict_detection()
 
-            filename = 'conflict_trees.dot'
+            if not self.silent:
+                filename = 'conflict_trees.dot'
 
+        filename = 'conflict_trees.dot'
         self.generate_conflict_trees(filename)
         self.mxnet_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
         #self.topdown_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
@@ -87,7 +91,8 @@ class MXNetTreeAllreduce(Allreduce):
         reset = True
         level = 0
 
-        while (not self.backtrack) and (not stop or reset):
+        # TODO: the last condition is just for torus
+        while (not self.backtrack) and (not stop or reset) and (self.network.nodes <= 16):
             if reset:
                 cluster_pairs.clear()
                 partitions_temp = deepcopy(partitions)
@@ -111,8 +116,15 @@ class MXNetTreeAllreduce(Allreduce):
 
         success = True
         if reset:
-            print("No valid tree found from root {}, try backtracking".format(root))
-            success = self.backtrack_generate_binary_tree(root)
+            if self.network.nodes > 16:
+                if not self.silent:
+                    print('No valid tree found from root {} and network too big ({} nodes)'
+                            ', compute torus tree'.format(root, self.network.nodes))
+                self.compute_torus_tree(root)
+            else:
+                if not self.silent:
+                    print("No valid tree found from root {}, try backtracking".format(root))
+                success = self.backtrack_generate_binary_tree(root)
         else:
             self.topology[root].clear()
             self.topology[root] = deepcopy(topo_temp)
@@ -361,6 +373,79 @@ class MXNetTreeAllreduce(Allreduce):
 
 
     '''
+    compute_torus_tree() - compute trees for torus from root
+    @root: root id of the current tree
+    '''
+    def compute_torus_tree(self, root):
+        # Clear before starting
+        self.topology[root].clear()
+        self.scan[root].clear()
+
+        '''
+        depth = self.compute_depth()
+        depth_leaves = 1 << depth
+
+        # result vector
+        result = -np.ones(depth_leaves, dtype=int)
+
+        # Place root and build up the tree
+        result[0] = root
+
+        for height in range(0, depth):
+            stride = 1 << (depth - height)
+            last = depth_leaves - stride
+            for i in range(last, -1, -stride):
+                # TODO: not neccessarily visit all old ones first, currently old/new alternate
+                node = result[i]
+                assert node != -1
+                child = -1
+                for neighbor in self.network.from_nodes[node]:
+                    if neighbor not in result:
+                        child = neighbor
+                        break
+                if child == -1:
+                    child = node
+                result[i + (stride >> 1)] = child
+
+        self.post_process(result, depth)
+        print('torus tree {} result: {}'.format(root, result))
+        '''
+
+        tree = [[root]]
+        nodes = set()
+        nodes.add(root)
+
+        depth = 0
+        while len(nodes) < self.network.nodes:
+
+            tree.append([])
+            num_nodes = 1 << depth
+
+            for parent in reversed(tree[depth]):
+                left_child = parent
+                right_child = -1
+                for neighbor in self.network.from_nodes[parent]:
+                    if neighbor not in nodes:
+                        right_child = neighbor
+                        nodes.add(neighbor)
+                        break
+                if right_child == -1:
+                    right_child = parent
+                tree[depth+1].insert(0, right_child)
+                tree[depth+1].insert(0, left_child)
+
+            depth += 1
+
+        result = np.array(tree[-1], dtype=int)
+
+        self.post_process(result, depth)
+        #print('torus tree {} result: {}'.format(root, result))
+
+        self.form_topology(result, root, depth)
+    # def compute_torus_tree(self, root)
+
+
+    '''
     backtrack_generate_binary_tree() - brute-force backtracking to find a binary tree
     @root: root id of the current tree
 
@@ -391,7 +476,7 @@ class MXNetTreeAllreduce(Allreduce):
         # State vector
         # -1 means unplaced
         state = -np.ones(depth_leaves, dtype=int)
-        result = -np.ones(depth_leaves)
+        result = -np.ones(depth_leaves, dtype=int)
         result_weight = 0
 
         # Place root and try all combinations
@@ -506,7 +591,7 @@ class MXNetTreeAllreduce(Allreduce):
         # If we encounter an accelerator for the first time, increment found_vec
         # Otherwise, do nothing
         found = set()
-        found_vec = np.zeros(self.network.nodes)
+        found_vec = np.zeros(self.network.nodes, dtype=int)
         for val in state:
             if val == -1:
                 continue
@@ -636,8 +721,8 @@ class MXNetTreeAllreduce(Allreduce):
     @depth: depth of the tree
 
     desc - Given a spanning tree encoded as result, which was convenient for performing
-           backtracking, convert it topology and scan in the classic "binary tree
-           stored in an array" format. For binary trees scan_ is redundant, but this
+           backtracking, convert it to topology and scan in the classic "binary tree
+           stored in an array" format. For binary trees scan is redundant, but this
            additional data structure leaves future generalization to k-radix trees.
 
            Initial result: [3 3 0 4 1 2 5 6]
@@ -796,7 +881,7 @@ class MXNetTreeAllreduce(Allreduce):
     '''
     def compute_depth(self):
         n = self.network.nodes
-        for depth in range(n):
+        for depth in range(self.mxnet_maxdepth):
             num = 2 << depth
             if n <= num:
                 return depth + 1
@@ -914,7 +999,7 @@ class MXNetTreeAllreduce(Allreduce):
 
         max_depth = -1
         ranks[0] = []
-        for root in range(16):
+        for root in range(self.network.nodes):
             self.conflict_trees[root] = []
 
             tree += '    /* tree {} */\n'.format(root)
@@ -935,6 +1020,8 @@ class MXNetTreeAllreduce(Allreduce):
                     if i % 2 == 0:
                         parent = '"{}-{}"'.format(root, self.topology[root][i - 1])
                         child = '"{}-{}"'.format(root, self.topology[root][i])
+                        if parent == child: # no self loop, redundant
+                            continue
                         ranks[row].append(child)
                         tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, iteration))
                         self.conflict_trees[root][row - 1].append((self.topology[root][i], self.topology[root][i - 1]))
@@ -1320,34 +1407,69 @@ def test(args):
     kary = args.kary
     allreduce = MXNetTreeAllreduce(network)
     allreduce.backtrack = args.backtrack
-    begin_seed = 99
-    end_seed = 100
+    begin_seed = 100
+    end_seed = 101
+    better = {}
+    same = {}
+    worse = {}
+    comparison_distribution = {'Better': 0, 'Same': 0, 'Worse': 0}
+    total_iterations = 0
+    total_sort_iterations = 0
+    num_seeds = 0
     # NOTE: It seems sorted won't help much due to random picks to break ties in the during KL algorithm.
     #       Sometimes better and sometimes worse, most of the time are same. Seed 47 run forever, buggy!
     #       For example, random seed 8 makes it worse and random seed 9 makes it better. The hypothesis
     #       is that the limitation is inherent in the decoupling of tree construction and scheduling.
     for seed in range(begin_seed, end_seed):
         #print('seed: {}'.format(seed))
+        if seed == 47:
+            continue
         random.seed(seed)
         allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
-        allreduce.generate_trees_dotfile('mxnettree.dot')
+        if args.gendotfile:
+            allreduce.generate_trees_dotfile('mxnettree.dot')
         iterations = allreduce.iterations
         if allreduce.backtrack:
             print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
             continue
-        random.seed(seed)
-        allreduce.compute_trees(kary, alternate=True, sort=True, verbose=False)
-        allreduce.generate_trees_dotfile('mxnettree_sort.dot')
+        allreduce.mxnet_schedule(kary, alternate=True, sort=True, verbose=False)
+        if args.gendotfile:
+            allreduce.generate_trees_dotfile('mxnettree_sort.dot')
         sort_iterations = allreduce.iterations
         #print('MXNetTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
         if iterations > sort_iterations:
             compare = 'Better'
+            diff = iterations - sort_iterations
+            if diff in better.keys():
+                better[diff] += 1
+            else:
+                better[diff] = 1
         elif iterations == sort_iterations:
             compare = 'Same'
+            if iterations in same.keys():
+                same[iterations] += 1
+            else:
+                same[iterations] = 1
         else:
             compare = 'Worse'
+            diff = sort_iterations - iterations
+            if diff in worse.keys():
+                worse[diff] += 1
+            else:
+                worse[diff] = 1
+        comparison_distribution[compare] += 1
+        num_seeds += 1
+        total_iterations += iterations
+        total_sort_iterations += sort_iterations
         print('Seed {}: MXNetTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
             seed, iterations, sort_iterations, compare))
+    if num_seeds:
+        print('Comparison distribution: {}'.format(comparison_distribution))
+        print('Iteration distribution for Same: {}'.format(same))
+        print('Iteration difference for Better: {}'.format(better))
+        print('Iteration difference for Worse: {}'.format(worse))
+        print('Average iterations: {} (no sort), and {} (sort)'.format(
+            total_iterations / num_seeds, total_sort_iterations / num_seeds))
 
 
 if __name__ == '__main__':
@@ -1359,6 +1481,8 @@ if __name__ == '__main__':
                         help='generay kary tree, default is 2 (binary)')
     parser.add_argument('--backtrack', default=False, action='store_true',
                         help='use backtracking only, default is False')
+    parser.add_argument('--gendotfile', default=False, action='store_true',
+                        help='generate tree dotfiles, default is False')
 
     args = parser.parse_args()
 
