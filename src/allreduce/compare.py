@@ -5,7 +5,7 @@ from mxnettree_allreduce import MXNetTreeAllreduce
 
 def main():
     begin_dimension = 4
-    end_dimeinsion = 11
+    end_dimeinsion = 17
     for dimension in range(begin_dimension, end_dimeinsion + 1, 2):
         nodes = dimension * dimension
         network = networks.Torus(nodes, dimension)
@@ -15,7 +15,7 @@ def main():
         mxnettree_allreduce.silent = True
         print('Network size: {}'.format(nodes))
         multitree_allreduce.compute_trees(2)
-        mxnettree_allreduce.compute_trees(2)
+        mxnettree_allreduce.compute_best_trees(10, 2)
         print(' Iterations for binary trees - MultiTree: {}, MXNetTree: {}'.format(
             multitree_allreduce.iterations, mxnettree_allreduce.iterations))
         for kary in range(3, 6):

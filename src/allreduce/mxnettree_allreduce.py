@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import random
+from datetime import datetime
 from copy import deepcopy
 
 import networks
@@ -21,6 +22,46 @@ class MXNetTreeAllreduce(Allreduce):
 
 
     '''
+    compute_best_trees() - computes binary spanning trees for the given network
+    @kary: build kary-trees
+    @alternate: Ture - allocate the links by alternating trees every allocation
+                False - allocating links for one tree as much as possble
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
+    @verbose: print detailed info of tree construction process
+
+    desc - try multiple random seeds for KL algorithm and select the best trees
+    '''
+    def compute_best_trees(self, trials, kary, alternate=True, sort=True, verbose=False):
+        # TODO: this is for torus network, for other networks, it should be changed
+        if self.network.nodes > 16:
+            self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
+            return
+
+        # set random seed as the current time
+        random.seed(datetime.now())
+
+        if trials < 10:
+            end = 100
+        else:
+            end = trials * 10
+
+        seeds = random.sample(range(0, end), trials)
+        best_seed = None
+        best_iterations = None
+        for seed in seeds:
+            random.seed(seed)
+            self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
+            if best_iterations == None or best_iterations > self.iterations:
+                best_seed = seed
+                best_iterations = self.iterations
+
+        if best_seed != seeds[-1]:
+            random.seed(best_seed)
+            self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
+    # def compute_best_trees(self, trials, kary, alternate=True, sort=True, verbose=False)
+
+    '''
     compute_trees() - computes binary spanning trees for the given network
     @kary: useless, skip
     @alternate: Ture - allocate the links by alternating trees every allocation
@@ -29,7 +70,7 @@ class MXNetTreeAllreduce(Allreduce):
            last allocation iteration
     @verbose: print detailed info of tree construction process
     '''
-    def compute_trees(self, kary, alternate=True, sort=False, verbose=False):
+    def compute_trees(self, kary, alternate=True, sort=True, verbose=False):
         self.topology = []
         self.scan = []
         self.adjacency_matrix = deepcopy(self.network.adjacency_matrix)
@@ -380,36 +421,6 @@ class MXNetTreeAllreduce(Allreduce):
         # Clear before starting
         self.topology[root].clear()
         self.scan[root].clear()
-
-        '''
-        depth = self.compute_depth()
-        depth_leaves = 1 << depth
-
-        # result vector
-        result = -np.ones(depth_leaves, dtype=int)
-
-        # Place root and build up the tree
-        result[0] = root
-
-        for height in range(0, depth):
-            stride = 1 << (depth - height)
-            last = depth_leaves - stride
-            for i in range(last, -1, -stride):
-                # TODO: not neccessarily visit all old ones first, currently old/new alternate
-                node = result[i]
-                assert node != -1
-                child = -1
-                for neighbor in self.network.from_nodes[node]:
-                    if neighbor not in result:
-                        child = neighbor
-                        break
-                if child == -1:
-                    child = node
-                result[i + (stride >> 1)] = child
-
-        self.post_process(result, depth)
-        print('torus tree {} result: {}'.format(root, result))
-        '''
 
         tree = [[root]]
         nodes = set()
@@ -1053,6 +1064,7 @@ class MXNetTreeAllreduce(Allreduce):
 
     '''
     mxnet_schedule() - resolve conflicts and generate schedule trees
+    @kary: build kary-trees
     @alternate: Ture - allocate the links by alternating trees every allocation
                 False - allocating links for one tree as much as possble
     @cross_level: allocate links from parent levels even some nodes at children
@@ -1235,6 +1247,7 @@ class MXNetTreeAllreduce(Allreduce):
 
     '''
     topdown_schedule() - resolve conflicts and generate trees
+    @kary: build kary-trees
     @alternate: Ture - allocate the links by alternating trees every allocation
                 False - allocating links for one tree as much as possble
     @cross_level: allocate links from children levels even some nodes at parent
@@ -1463,7 +1476,7 @@ def test(args):
         total_sort_iterations += sort_iterations
         print('Seed {}: MXNetTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
             seed, iterations, sort_iterations, compare))
-    if num_seeds:
+    if num_seeds > 1:
         print('Comparison distribution: {}'.format(comparison_distribution))
         print('Iteration distribution for Same: {}'.format(same))
         print('Iteration difference for Better: {}'.format(better))
