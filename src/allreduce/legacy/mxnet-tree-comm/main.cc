@@ -25,7 +25,7 @@ void generate_trees_dotfile(std::string filename,
 
   int max_depth = -1;
   ranks[0] = std::vector<std::string>();
-  for (int root = 0; root < 16; root++) {
+  for (int root = 0; root < scan.size(); root++) {
     trees_dot_out << "    /* tree " << root << " */" << std::endl;
     std::string node = "\"" + std::to_string(root) + "-" + std::to_string(root) + "\"";
     ranks[0].push_back(node);
@@ -89,14 +89,14 @@ void link_conflict_detection(std::vector<std::vector<size_t>> &topology,
   std::vector<std::map<std::string, int>> links_tree_map;
   std::vector<int> conflicts;
 
-  for (int root = 0; root < 16; root++) {
+  for (int root = 0; root < scan.size(); root++) {
     int depth = scan[root].size() - 1;
     for (int row = 1; row < depth; row++) {
       if (row > links_tree_map.size()) {
-        std::cout << "push back a new map for row " << row << std::endl;
+        //std::cout << "push back a new map for row " << row << std::endl;
         links_tree_map.resize(row, std::map<std::string, int>());
         conflicts.resize(row, 0);
-        std::cout << "added a new map for row " << row << std::endl;
+        //std::cout << "added a new map for row " << row << std::endl;
       }
       int start = scan[root][row];
       int end = scan[root][row + 1];
@@ -107,9 +107,9 @@ void link_conflict_detection(std::vector<std::vector<size_t>> &topology,
           int child = topology[root][start];
           std::string link = std::to_string(child) + "->" + std::to_string(parent);
           if (links_tree_map[row - 1].find(link) != links_tree_map[row - 1].end()) {
-            std::cerr << "Conflict foud for link " << link
-              << " between tree " << links_tree_map[row - 1][link]
-              << " and tree " << root << std::endl;
+            //std::cerr << "Conflict foud for link " << link
+            //  << " between tree " << links_tree_map[row - 1][link]
+            //  << " and tree " << root << std::endl;
             conflicts[row - 1]++;
           } else {
             links_tree_map[row - 1][link] = root;
@@ -125,41 +125,67 @@ void link_conflict_detection(std::vector<std::vector<size_t>> &topology,
   }
 }
 
-int main() {
-  std::vector<float> link_matrix(16*16);
+int main(int argc, char **argv) {
+
+  int dimension;
+  bool backtrack;
+  if (argc == 1) {
+    dimension = 4;
+    backtrack = false;
+  } else if (argc == 2) {
+    dimension = atoi(argv[1]);
+    backtrack = false;
+  } else if (argc == 3) {
+    dimension = atoi(argv[1]);
+    backtrack = atoi(argv[2]) > 0;
+  } else {
+    std::cerr << "Usage: ./kernighan_lin <dimension> <backtrack>" << std::endl;
+    exit(0);
+  }
+
+  int nodes = dimension * dimension;
+
+  std::cout << "network dimension is " << dimension
+    << ", network size: " << nodes;
+  if (backtrack)
+    std::cout << ", backtracking" << std::endl;
+  else
+    std::cout << ", no backtrack" << std::endl;
+
+  std::vector<float> link_matrix(nodes*nodes);
 
   int pci_link = 1;
   int nvlink = 2;
   int link_weight = nvlink;//pci_link;
 
   // link topology weight matrix for torus
-  for (int n = 0; n < 16; n++) {
-    int row = n / 4;
-    int col = n % 4;
+  for (int n = 0; n < nodes; n++) {
+    int row = n / dimension;
+    int col = n % dimension;
 
-    int north = (row == 0) ? n + 12 : n - 4;
-    link_matrix[n * 16 + north] = link_weight;
-    link_matrix[north * 16 + n] = link_weight;
+    int north = (row == 0) ? n + dimension * (dimension - 1) : n - dimension;
+    link_matrix[n * nodes + north] = link_weight;
+    link_matrix[north * nodes + n] = link_weight;
 
-    int south = (row == 3) ? n - 12 : n + 4;
-    link_matrix[n * 16 + south] = pci_link;
-    link_matrix[south * 16 + n] = pci_link;
+    int south = (row == 3) ? n - dimension * (dimension - 1) : n + dimension;
+    link_matrix[n * nodes + south] = pci_link;
+    link_matrix[south * nodes + n] = pci_link;
 
-    int west = (col == 0) ? n + 3 : n - 1;
-    link_matrix[n * 16 + west] = link_weight;
-    link_matrix[west * 16 + n] = link_weight;
+    int west = (col == 0) ? n + dimension - 1 : n - 1;
+    link_matrix[n * nodes + west] = link_weight;
+    link_matrix[west * nodes + n] = link_weight;
 
-    int east = (col == 3) ? n - 3 : n + 1;
-    link_matrix[n * 16 + east] = link_weight;
-    link_matrix[east * 16 + n] = link_weight;
+    int east = (col == 3) ? n - dimension + 1 : n + 1;
+    link_matrix[n * nodes + east] = link_weight;
+    link_matrix[east * nodes + n] = link_weight;
   }
-  assert(IsConnected(link_matrix, 16));
+  assert(IsConnected(link_matrix, nodes));
 
   std::vector<std::vector<size_t>> topology;
   std::vector<std::vector<size_t>> scan;
 
   // Compute trees using mxnet's multi-tree collective communicaiton
-  ComputeTrees(link_matrix, 16, 0.7, false, &topology, &scan);
+  ComputeTrees(link_matrix, nodes, 0.7, backtrack, &topology, &scan);
 
   // detect and summarize the link conflicts
   link_conflict_detection(topology, scan);

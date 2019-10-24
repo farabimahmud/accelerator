@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 from copy import deepcopy
 
@@ -15,9 +16,11 @@ class MultiTreeAllreduce(Allreduce):
     @kary: build kary-trees
     @alternate: Ture - allocate the links by alternating trees every allocation
                 False - allocating links for one tree as much as possble
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
     @verbose: print detailed info of tree construction process
     '''
-    def compute_trees(self, kary, alternate=True, verbose=False):
+    def compute_trees(self, kary, alternate=True, sort=False, verbose=False):
         assert kary > 1
 
         # initialize empty trees
@@ -33,9 +36,14 @@ class MultiTreeAllreduce(Allreduce):
         num_trees = 0
         self.iterations = 0
 
+        # sort the roots based on link conflicts during allocation
+        sorted_roots = list(range(self.network.nodes))
+        conflicts = [0] * self.network.nodes
+
         while num_trees < self.network.nodes:
             if verbose:
                 print('iteration {}'.format(self.iterations))
+
             from_nodes = deepcopy(self.network.from_nodes)
             last_tree_nodes = deepcopy(tree_nodes)
 
@@ -44,18 +52,18 @@ class MultiTreeAllreduce(Allreduce):
 
                 changed = True
 
-                new_edges = {}
+                num_new_children = {}
                 for root in range(self.network.nodes):
-                    new_edges[root] = {}
+                    num_new_children[root] = {}
                     for parent in last_tree_nodes[root]:
-                        new_edges[root][parent] = 0
+                        num_new_children[root][parent] = 0
 
                 turns = 0
                 while changed:
                     changed = False
                     old_from_nodes = deepcopy(from_nodes)
 
-                    root = turns % self.network.nodes
+                    root = sorted_roots[turns % self.network.nodes]
 
                     while len(tree_nodes[root]) == self.network.nodes:
                         turns += 1
@@ -68,11 +76,12 @@ class MultiTreeAllreduce(Allreduce):
 
                     for parent in last_tree_nodes[root]:
                         children = deepcopy(from_nodes[parent])
-                        if new_edges[root][parent] == kary - 1:
+                        if num_new_children[root][parent] == kary - 1:
+                            conflicts[root] += 1
                             continue
                         for child in children:
                             if child not in tree_nodes[root]:
-                                new_edges[root][parent] += 1
+                                num_new_children[root][parent] += 1
                                 if verbose:
                                     print(' -- add node {} to tree {}'.format(child, root))
                                     print('    before: {}'.format(self.trees[root]))
@@ -84,6 +93,8 @@ class MultiTreeAllreduce(Allreduce):
                                     print('    tree nodes: {}'.format(tree_nodes[root]))
                                 changed = True
                                 break
+                            else:
+                                conflicts[root] += 1
                         if changed:
                             break
 
@@ -98,6 +109,13 @@ class MultiTreeAllreduce(Allreduce):
 
                     if turns % self.network.nodes != 0:
                         changed = True
+                    else:
+                        if sort:
+                            #print('before sorting: {}'.format(sorted_roots))
+                            #print('conflicts: {}'.format(conflicts))
+                            sorted_roots = [root for _ , root in sorted(zip(conflicts, sorted_roots), reverse=True)]
+                            conflicts = [0] * self.network.nodes
+                            #print('after sorting: {}'.format(sorted_roots))
 
             else:   # else case: allocating links for one tree as much as possble
                 for root in range(self.network.nodes):
@@ -106,9 +124,9 @@ class MultiTreeAllreduce(Allreduce):
                     current_tree_nodes = deepcopy(tree_nodes[root])
                     for p, parent in enumerate(current_tree_nodes):
                         children = deepcopy(from_nodes[parent])
-                        new_edges = 0
+                        num_new_children = 0
                         for child in children:
-                            if new_edges == kary - 1:
+                            if num_new_children == kary - 1:
                                 break
                             if verbose:
                                 print(' child {}'.format(child))
@@ -122,7 +140,7 @@ class MultiTreeAllreduce(Allreduce):
                                 if verbose:
                                     print('    after : {}'.format(self.trees[root]))
                                     print('    tree nodes: {}'.format(tree_nodes[root]))
-                                new_edges += 1
+                                num_new_children += 1
                     if len(tree_nodes[root]) == self.network.nodes:
                         num_trees += 1
                         if verbose:
@@ -134,19 +152,44 @@ class MultiTreeAllreduce(Allreduce):
 
         if verbose:
             print('Total iterations for network size of {}: {}'.format(self.network.nodes, self.iterations))
-    # def compute_trees(self, kary, alternate=False, verbose=False)
+    # def compute_trees(self, kary, alternate=False, sort=True, verbose=False)
 
 
-def test():
-    dimension = 4
+def test(args):
+    dimension = args.dimension
     nodes = dimension * dimension
     network = networks.Torus(nodes, dimension)
     network.build_graph()
+
+    kary = args.kary
     allreduce = MultiTreeAllreduce(network)
-    allreduce.compute_trees(2, alternate=True);
+    # NOTE: sorted doesn't help for multitree since it only considers available links
+    allreduce.compute_trees(kary, alternate=True, sort=False)
     allreduce.generate_trees_dotfile('multitree.dot')
-    print('MultiTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+    iterations = allreduce.iterations
+    #print('MultiTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+    allreduce.compute_trees(kary, alternate=True, sort=True)
+    allreduce.generate_trees_dotfile('multitree_sort.dot')
+    sort_iterations = allreduce.iterations
+    #print('MultiTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
+    if iterations > sort_iterations:
+        compare = 'Better'
+    elif iterations == sort_iterations:
+        compare = 'Same'
+    else:
+        compare = 'Worse'
+    print('MultiTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
+        iterations, sort_iterations, compare))
 
 
 if __name__ == '__main__':
-    test()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dimension', default=4, type=int,
+                        help='network dimension, default is 4')
+    parser.add_argument('--kary', default=2, type=int,
+                        help='generay kary tree, default is 2 (binary)')
+
+    args = parser.parse_args()
+
+    test(args)

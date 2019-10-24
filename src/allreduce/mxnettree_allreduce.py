@@ -1,7 +1,9 @@
+import argparse
 import numpy as np
 import random
+from datetime import datetime
 from copy import deepcopy
-random.seed(99)
+
 import networks
 from allreduce import Allreduce
 
@@ -11,20 +13,68 @@ class MXNetTreeAllreduce(Allreduce):
         super().__init__(network)
         self.alpha = 0.7    # link usage penalty
         self.backtrack = False   # whether or not to use backtracking to generate trees
-        self.topology = []   # topology stores the generated (maybe) link-conflict trees
-        self.scan = []       # scan stores the start of each level of each conflict tree
+        self.topology = None   # topology stores the generated (maybe) link-conflict trees
+        self.scan = None       # scan stores the start of each level of each conflict tree
         self.conflict_trees = None
-        self.adjacency_matrix = deepcopy(self.network.adjacency_matrix)
+        self.adjacency_matrix = None #deepcopy(self.network.adjacency_matrix)
+        self.mxnet_maxdepth = 16
+        self.silent = False
 
+
+    '''
+    compute_best_trees() - computes binary spanning trees for the given network
+    @kary: build kary-trees
+    @alternate: Ture - allocate the links by alternating trees every allocation
+                False - allocating links for one tree as much as possble
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
+    @verbose: print detailed info of tree construction process
+
+    desc - try multiple random seeds for KL algorithm and select the best trees
+    '''
+    def compute_best_trees(self, trials, kary, alternate=True, sort=True, verbose=False):
+        # TODO: this is for torus network, for other networks, it should be changed
+        if self.network.nodes > 16:
+            self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
+            return
+
+        # set random seed as the current time
+        random.seed(datetime.now())
+
+        if trials < 10:
+            end = 100
+        else:
+            end = trials * 10
+
+        seeds = random.sample(range(0, end), trials)
+        best_seed = None
+        best_iterations = None
+        for seed in seeds:
+            random.seed(seed)
+            self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
+            if best_iterations == None or best_iterations > self.iterations:
+                best_seed = seed
+                best_iterations = self.iterations
+
+        if best_seed != seeds[-1]:
+            random.seed(best_seed)
+            self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
+    # def compute_best_trees(self, trials, kary, alternate=True, sort=True, verbose=False)
 
     '''
     compute_trees() - computes binary spanning trees for the given network
     @kary: useless, skip
     @alternate: Ture - allocate the links by alternating trees every allocation
                 False - allocating links for one tree as much as possble
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
     @verbose: print detailed info of tree construction process
     '''
-    def compute_trees(self, kary, alternate=True, verbose=False):
+    def compute_trees(self, kary, alternate=True, sort=True, verbose=False):
+        self.topology = []
+        self.scan = []
+        self.adjacency_matrix = deepcopy(self.network.adjacency_matrix)
+
         for root in range(self.network.nodes):
             self.topology.append([])
             self.scan.append([])
@@ -32,14 +82,20 @@ class MXNetTreeAllreduce(Allreduce):
             self.scan[root].append(0)
             self.compute_tree_from_root(root)
 
+        filename = None
         if verbose:
             for root in range(self.network.nodes):
                 self.print_topo("\nTree {}".format(root), self.topology[root], self.scan[root])
 
             self.link_conflict_detection()
 
-        self.generate_conflict_trees()
-        self.link_conflict_resolution(alternate, verbose)
+            if not self.silent:
+                filename = 'conflict_trees.dot'
+
+        filename = 'conflict_trees.dot'
+        self.generate_conflict_trees(filename)
+        self.mxnet_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
+        #self.topdown_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
     # def compute_trees(self, kary, alternate=True, verbose=False)
 
 
@@ -76,7 +132,8 @@ class MXNetTreeAllreduce(Allreduce):
         reset = True
         level = 0
 
-        while (not self.backtrack) and (not stop or reset):
+        # TODO: the last condition is just for torus
+        while (not self.backtrack) and (not stop or reset) and (self.network.nodes <= 16):
             if reset:
                 cluster_pairs.clear()
                 partitions_temp = deepcopy(partitions)
@@ -100,8 +157,15 @@ class MXNetTreeAllreduce(Allreduce):
 
         success = True
         if reset:
-            print("No valid tree found from root {}, try backtracking".format(root))
-            success = self.backtrack_generate_binary_tree(root)
+            if self.network.nodes > 16:
+                if not self.silent:
+                    print('No valid tree found from root {} and network too big ({} nodes)'
+                            ', compute torus tree'.format(root, self.network.nodes))
+                self.compute_torus_tree(root)
+            else:
+                if not self.silent:
+                    print("No valid tree found from root {}, try backtracking".format(root))
+                success = self.backtrack_generate_binary_tree(root)
         else:
             self.topology[root].clear()
             self.topology[root] = deepcopy(topo_temp)
@@ -350,6 +414,49 @@ class MXNetTreeAllreduce(Allreduce):
 
 
     '''
+    compute_torus_tree() - compute trees for torus from root
+    @root: root id of the current tree
+    '''
+    def compute_torus_tree(self, root):
+        # Clear before starting
+        self.topology[root].clear()
+        self.scan[root].clear()
+
+        tree = [[root]]
+        nodes = set()
+        nodes.add(root)
+
+        depth = 0
+        while len(nodes) < self.network.nodes:
+
+            tree.append([])
+            num_nodes = 1 << depth
+
+            for parent in reversed(tree[depth]):
+                left_child = parent
+                right_child = -1
+                for neighbor in self.network.from_nodes[parent]:
+                    if neighbor not in nodes:
+                        right_child = neighbor
+                        nodes.add(neighbor)
+                        break
+                if right_child == -1:
+                    right_child = parent
+                tree[depth+1].insert(0, right_child)
+                tree[depth+1].insert(0, left_child)
+
+            depth += 1
+
+        result = np.array(tree[-1], dtype=int)
+
+        self.post_process(result, depth)
+        #print('torus tree {} result: {}'.format(root, result))
+
+        self.form_topology(result, root, depth)
+    # def compute_torus_tree(self, root)
+
+
+    '''
     backtrack_generate_binary_tree() - brute-force backtracking to find a binary tree
     @root: root id of the current tree
 
@@ -365,7 +472,7 @@ class MXNetTreeAllreduce(Allreduce):
     def backtrack_generate_binary_tree(self, root):
         # Clear before starting
         self.topology[root].clear()
-        self.topology[root].clear()
+        self.scan[root].clear()
 
         # Compute depth
         # num_elemennts: depth
@@ -380,7 +487,7 @@ class MXNetTreeAllreduce(Allreduce):
         # State vector
         # -1 means unplaced
         state = -np.ones(depth_leaves, dtype=int)
-        result = -np.ones(depth_leaves)
+        result = -np.ones(depth_leaves, dtype=int)
         result_weight = 0
 
         # Place root and try all combinations
@@ -390,9 +497,9 @@ class MXNetTreeAllreduce(Allreduce):
         # For larger number of accelerators, settle for first tree found (non-optimal),
         # but this saves a lot of runtime since Backtrack is exponential time
         if depth <= 3:
-            result_weight = self.iterative_backtrack(state, result, result_weight, depth, True)
+            result_weight, result = self.iterative_backtrack(state, result, result_weight, depth, True)
         else:
-            result_weight = self.iterative_backtrack(state, result, result_weight, depth, False)
+            result_weight, result = self.iterative_backtrack(state, result, result_weight, depth, False)
 
         success = self.form_topology(result, root, depth)
 
@@ -462,7 +569,7 @@ class MXNetTreeAllreduce(Allreduce):
                 state[len(state_stack)] = -1
                 row -= 1
 
-        return best_result_weight
+        return best_result_weight, best_result
     # def iterative_backtrack(state, best_result, best_result_weight, depth, optimal):
 
 
@@ -495,7 +602,7 @@ class MXNetTreeAllreduce(Allreduce):
         # If we encounter an accelerator for the first time, increment found_vec
         # Otherwise, do nothing
         found = set()
-        found_vec = np.zeros(self.network.nodes)
+        found_vec = np.zeros(self.network.nodes, dtype=int)
         for val in state:
             if val == -1:
                 continue
@@ -625,8 +732,8 @@ class MXNetTreeAllreduce(Allreduce):
     @depth: depth of the tree
 
     desc - Given a spanning tree encoded as result, which was convenient for performing
-           backtracking, convert it topology and scan in the classic "binary tree
-           stored in an array" format. For binary trees scan_ is redundant, but this
+           backtracking, convert it to topology and scan in the classic "binary tree
+           stored in an array" format. For binary trees scan is redundant, but this
            additional data structure leaves future generalization to k-radix trees.
 
            Initial result: [3 3 0 4 1 2 5 6]
@@ -654,13 +761,9 @@ class MXNetTreeAllreduce(Allreduce):
         for i in range(depth, -1, -1):
             stride = 1 << i
             for j in range(0, len(result), stride):
-                from_node = resullt[j]
+                from_node = result[j]
                 self.topology[root].append(from_node)
             self.scan[root].append(len(self.topology[root]))
-
-        # Insert at the end, result vector
-        self.topology[root].append(result)
-        self.scan[root].append(len(self.topology[root]))
 
         return success
     # def form_topology(self, result, root, depth)
@@ -788,7 +891,8 @@ class MXNetTreeAllreduce(Allreduce):
     @depth: number of levels of binary tree
     '''
     def compute_depth(self):
-        for depth in range(self.network.nodes):
+        n = self.network.nodes
+        for depth in range(self.mxnet_maxdepth):
             num = 2 << depth
             if n <= num:
                 return depth + 1
@@ -906,7 +1010,7 @@ class MXNetTreeAllreduce(Allreduce):
 
         max_depth = -1
         ranks[0] = []
-        for root in range(16):
+        for root in range(self.network.nodes):
             self.conflict_trees[root] = []
 
             tree += '    /* tree {} */\n'.format(root)
@@ -927,6 +1031,8 @@ class MXNetTreeAllreduce(Allreduce):
                     if i % 2 == 0:
                         parent = '"{}-{}"'.format(root, self.topology[root][i - 1])
                         child = '"{}-{}"'.format(root, self.topology[root][i])
+                        if parent == child: # no self loop, redundant
+                            continue
                         ranks[row].append(child)
                         tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, iteration))
                         self.conflict_trees[root][row - 1].append((self.topology[root][i], self.topology[root][i - 1]))
@@ -957,18 +1063,224 @@ class MXNetTreeAllreduce(Allreduce):
 
 
     '''
-    link_conflict_resolution() - resolve conflicts and generate trees
+    mxnet_schedule() - resolve conflicts and generate schedule trees
+    @kary: build kary-trees
     @alternate: Ture - allocate the links by alternating trees every allocation
                 False - allocating links for one tree as much as possble
+    @cross_level: allocate links from parent levels even some nodes at children
+                  level are not scheduled, but should not have dependency on those
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
     @verbose: print detailed info of tree construction process
+
+    desc - schedule the communications in time steps by allocating links using bottom-up
+           approach from leaves to root. Cross-level will schedule nodes at parent level
+           even some nodes at children level have yet been scheduled. However, for a
+           Bottom-Up approach, it does not help since the link requirments at levels closer
+           to root is less (Note that higher level of trees are more sparse in terms of link
+           usage).
     '''
-    def link_conflict_resolution(self, alternate=True, verbose=False):
+    def mxnet_schedule(self, kary, alternate=True, cross_level=True, sort=True, verbose=False):
+        assert kary > 1
+
         if verbose:
             print('Conflict trees:')
-            for root in range(network.nodes):
+
+        # expand and linearize the trees for cross-level scheduling
+        expanded_conflict_trees = {}
+        pending_dependent_children = {}
+        for root in range(self.network.nodes):
+            expanded_conflict_trees[root] = []
+            pending_dependent_children[root] = np.zeros(self.network.nodes)
+            if verbose:
                 print('     tree {}:'.format(root))
-                for row in self.conflict_trees[root]:
+            for row in reversed(self.conflict_trees[root]):
+                expanded_conflict_trees[root].extend(row)
+                if verbose:
                     print('         {}'.format(row))
+                for (child, parent) in row:
+                    pending_dependent_children[root][parent] += 1
+            if verbose:
+                print('         expanded: {}'.format(expanded_conflict_trees[root]))
+
+
+        # initialize empty trees
+        self.trees = {}
+        tree_nodes = {}
+        tree_level_nodes = {}
+        for root in range(self.network.nodes):
+            self.trees[root] = []
+            tree_nodes[root] = set()
+            ## add the leave nodes since they can be scheduled all the time
+            #for (child, parent) in self.conflict_trees[root][-1]:
+            #    tree_nodes[root].add(child)
+            tree_level_nodes[root] = {0: []}
+
+        # tree construction
+        num_trees = 0
+        self.iterations = 0
+
+        from_nodes = deepcopy(self.network.from_nodes)
+
+        # keep track of number of new children added for the iteration, constrained by k-ary
+        num_new_children = {}
+        for root in range(self.network.nodes):
+            num_new_children[root] = {}
+
+        if verbose:
+            print('iteration {}'.format(self.iterations))
+
+        # sort the roots based on link conflicts during allocation
+        sorted_roots = list(range(self.network.nodes))
+        conflicts = [0] * self.network.nodes
+
+        while num_trees < self.network.nodes:
+
+            change = False
+
+            #for root in range(self.network.nodes):
+            for root in sorted_roots:
+                if len(tree_nodes[root]) == self.network.nodes:
+                    continue
+
+                if cross_level: # take the whole tree
+                    child_parent_row = expanded_conflict_trees[root]
+                else:           # take only the highest level
+                    child_parent_row = self.conflict_trees[root][-1]
+
+                for (child, parent) in child_parent_row:
+                    if verbose:
+                        print(' try to add edge {}->{} to tree {}'.format(child, parent, root))
+                    if child in from_nodes[parent]: # link available
+                        if parent not in num_new_children[root].keys():
+                            num_new_children[root][parent] = 0
+                        # all dependent children of 'child' have been scheduled in eariler iteration
+                        # and parent's readix < k in current iteration
+                        if child not in tree_level_nodes[root][self.iterations] and \
+                                pending_dependent_children[root][child] == 0 and \
+                                num_new_children[root][parent] < kary - 1:
+                            num_new_children[root][parent] += 1
+                            assert child not in tree_nodes[root]
+                            change = True
+                            if verbose:
+                                print(' -- add node {} to tree {}'.format(child, root))
+                                print('    before: {}'.format(self.trees[root]))
+                            tree_nodes[root].add(child)
+                            from_nodes[parent].remove(child)
+                            self.trees[root].append((child, parent, self.iterations))
+                            tree_level_nodes[root][self.iterations].append(parent)
+                            pending_dependent_children[root][parent] -= 1
+                            if verbose:
+                                print('    after : {}'.format(self.trees[root]))
+                                print('    tree nodes: {}'.format(tree_nodes[root]))
+                            if cross_level:
+                                expanded_conflict_trees[root].remove((child, parent))
+                            else:
+                                self.conflict_trees[root][-1].remove((child, parent))
+                            if alternate:
+                                break
+                        else:
+                            if verbose:
+                                if num_new_children[root][parent] == kary - 1:
+                                    print(' ** reach kary {} for parent {}'.format(num_new_children[root][parent]+1, parent))
+                                elif pending_dependent_children[root][child] > 0:
+                                    print(' ** {} dependent child(ren) of {} not added yet'.format(
+                                        pending_dependent_children[root][child], child))
+                                else:
+                                    assert child in tree_level_nodes[root][self.iterations]
+                                    print(' ** child {} already added as parent in this iteration'.format(child))
+                    else:
+                        conflicts[root] += 1
+                        if verbose:
+                            print(' ** link {}->{} not avaliable'.format(child, parent))
+
+                if not cross_level and len(self.conflict_trees[root][-1]) == 0:
+                    self.conflict_trees[root].pop(-1)
+
+                if len(tree_nodes[root]) == self.network.nodes - 1:
+                    assert root not in tree_nodes[root]
+                    tree_nodes[root].add(root)
+                    if cross_level:
+                        assert len(expanded_conflict_trees[root]) == 0
+                    num_trees += 1
+                    if verbose:
+                        print('iteration {} - tree {} constructed: {}'.format(
+                            self.iterations, root, self.trees[root]))
+
+            if sort:
+                #print('before sorting: {}'.format(sorted_roots))
+                #print('conflicts: {}'.format(conflicts))
+                sorted_roots = [root for _ , root in sorted(zip(conflicts, sorted_roots), reverse=True)]
+                conflicts = [0] * self.network.nodes
+                #print('after sorting: {}'.format(sorted_roots))
+
+            if not change:
+                from_nodes = deepcopy(self.network.from_nodes)
+                self.iterations += 1
+                if verbose:
+                    print('iteration {}'.format(self.iterations))
+
+                # reset for new iteration
+                for root in range(self.network.nodes):
+                    tree_level_nodes[root][self.iterations] = []
+                    num_new_children[root] = {}
+
+        # verify that there is no link conflicts
+        for root in range(self.network.nodes):
+            for i in range(root + 1, self.network.nodes):
+                intersection = set(self.trees[root]) & set(self.trees[i])
+                if len(intersection) != 0:
+                    print('tree {} and tree {} have link conflicts {}'.format(root, i, intersection))
+                    print('tree {}: {}'.format(root, self.trees[root]))
+                    print('tree {}: {}'.format(i, self.trees[i]))
+                    exit()
+
+        for root in range(self.network.nodes):
+            tree = self.trees[root]
+            self.trees[root] = []
+            for child, parent, iteration in reversed(tree):
+                self.trees[root].append((child, parent, self.iterations - iteration))
+
+        self.iterations += 1
+    #def mxnet_schedule(self, kary, alternative=True, cross_level=True, verbose=False)
+
+
+    '''
+    topdown_schedule() - resolve conflicts and generate trees
+    @kary: build kary-trees
+    @alternate: Ture - allocate the links by alternating trees every allocation
+                False - allocating links for one tree as much as possble
+    @cross_level: allocate links from children levels even some nodes at parent
+                  level are not scheduled, but should not have dependency on those
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
+    @verbose: print detailed info of tree construction process
+
+    desc - schedule the communications in time steps by allocating links using top-down
+           approach from root to leaves. Cross-level tends to schedule higher potential
+           link conflicts at lower (closer to leaves) levels earilier, reducing the chance
+           of conflicts (Note that higher level of trees are more sparse in terms of link
+           usage).
+    '''
+    def topdown_schedule(self, kary, alternate=True, cross_level=True, sort=True, verbose=False):
+        assert kary > 1
+
+        if verbose:
+            print('Conflict trees:')
+
+        # expand and linearize the trees for cross-level scheduling
+        expanded_conflict_trees = {}
+        for root in range(self.network.nodes):
+            expanded_conflict_trees[root] = []
+            if verbose:
+                print('     tree {}:'.format(root))
+            for row in self.conflict_trees[root]:
+                expanded_conflict_trees[root].extend(row)
+                if verbose:
+                    print('         {}'.format(row))
+            if verbose:
+                print('         expanded: {}'.format(expanded_conflict_trees[root]))
+
 
         # initialize empty trees
         self.trees = {}
@@ -983,21 +1295,47 @@ class MXNetTreeAllreduce(Allreduce):
         num_trees = 0
         self.iterations = 0
 
-        #root = 0
         from_nodes = deepcopy(self.network.from_nodes)
+
+        # keep track of number of new children added for the iteration, constrained by k-ary
+        num_new_children = {}
+        for root in range(self.network.nodes):
+            num_new_children[root] = {}
+
+        if verbose:
+            print('iteration {}'.format(self.iterations))
+
+        # sort the roots based on link conflicts during allocation
+        sorted_roots = list(range(self.network.nodes))
+        conflicts = [0] * self.network.nodes
+
         while num_trees < self.network.nodes:
 
             change = False
 
-            for root in range(self.network.nodes):
+            #for root in range(self.network.nodes):
+            for root in sorted_roots:
                 if len(tree_nodes[root]) == self.network.nodes:
                     continue
 
-                child_parent_row = self.conflict_trees[root][0]
+                if cross_level: # take the whole tree
+                    child_parent_row = expanded_conflict_trees[root]
+                else:           # take only the highest level
+                    child_parent_row = self.conflict_trees[root][0]
+
                 for (child, parent) in child_parent_row:
-                    if child not in tree_level_nodes[root][self.iterations] and parent not in tree_level_nodes[root][self.iterations]:
-                        if child in from_nodes[parent]:
-                            assert(child not in tree_nodes[root])
+                    if verbose:
+                        print(' try to add edge {}->{} to tree {}'.format(child, parent, root))
+                    if child in from_nodes[parent]: # link available
+                        if parent not in num_new_children[root].keys():
+                            num_new_children[root][parent] = 0
+                        # parent has been scheduled in earilier iteration (first two checks)
+                        # and parent's readix < k in current iteration
+                        if parent not in tree_level_nodes[root][self.iterations] and \
+                                parent in tree_nodes[root] and \
+                                num_new_children[root][parent] < kary - 1:
+                            num_new_children[root][parent] += 1
+                            assert child not in tree_nodes[root]
                             change = True
                             if verbose:
                                 print(' -- add node {} to tree {}'.format(child, root))
@@ -1009,38 +1347,156 @@ class MXNetTreeAllreduce(Allreduce):
                             if verbose:
                                 print('    after : {}'.format(self.trees[root]))
                                 print('    tree nodes: {}'.format(tree_nodes[root]))
-                            if parent not in tree_level_nodes[root][self.iterations]:
-                                tree_level_nodes[root][self.iterations].append(parent)
-                            self.conflict_trees[root][0].remove((child, parent))
+                            if cross_level:
+                                expanded_conflict_trees[root].remove((child, parent))
+                            else:
+                                self.conflict_trees[root][0].remove((child, parent))
                             if alternate:
                                 break
-                if len(self.conflict_trees[root][0]) == 0:
+                        else:
+                            #conflicts[root] += 1
+                            if verbose:
+                                if num_new_children[root][parent] == kary - 1:
+                                    print(' ** reach kary {} for parent {}'.format(num_new_children[root][parent]+1, parent))
+                                elif parent not in tree_nodes[root]:
+                                    print(' ** parent {} not added yet'.format(parent))
+                                else:
+                                    assert parent in tree_level_nodes[root][self.iterations]
+                                    print(' ** child {} already added in this iteration'.format(child))
+                    else:
+                        conflicts[root] += 1
+                        if verbose:
+                            print(' ** link {}->{} not avaliable'.format(child, parent))
+
+                if not cross_level and len(self.conflict_trees[root][0]) == 0:
                     self.conflict_trees[root].pop(0)
+
                 if len(tree_nodes[root]) == self.network.nodes:
+                    if cross_level:
+                        assert len(expanded_conflict_trees[root]) == 0
                     num_trees += 1
                     if verbose:
-                        print('iteration {} - tree {} constructed: {}'.format(self.iterations, root, self.trees[root]))
+                        print('iteration {} - tree {} constructed: {}'.format(
+                            self.iterations, root, self.trees[root]))
+
+            if sort:
+                #print('before sorting: {}'.format(sorted_roots))
+                #print('conflicts: {}'.format(conflicts))
+                sorted_roots = [root for _ , root in sorted(zip(conflicts, sorted_roots), reverse=True)]
+                conflicts = [0] * self.network.nodes
+                #print('after sorting: {}'.format(sorted_roots))
 
             if not change:
                 from_nodes = deepcopy(self.network.from_nodes)
                 self.iterations += 1
+                if verbose:
+                    print('iteration {}'.format(self.iterations))
+
+                # reset for new iteration
                 for root in range(self.network.nodes):
                     tree_level_nodes[root][self.iterations] = []
+                    num_new_children[root] = {}
+
+        # verify that there is no link conflicts
+        for root in range(self.network.nodes):
+            for i in range(root + 1, self.network.nodes):
+                intersection = set(self.trees[root]) & set(self.trees[i])
+                if len(intersection) != 0:
+                    print('tree {} and tree {} have link conflicts {}'.format(root, i, intersection))
+                    print('tree {}: {}'.format(root, self.trees[root]))
+                    print('tree {}: {}'.format(i, self.trees[i]))
+                    exit()
 
         self.iterations += 1
-    #def link_conflict_resolution(self, alternative=True, verbose=False)
+    #def topdown_schedule(self, kary, alternative=True, cross_level=True, verbose=False)
 
 
-def test():
-    dimension = 4
+def test(args):
+    dimension = args.dimension
     nodes = dimension * dimension
     network = networks.Torus(nodes, dimension)
     network.build_graph()
+
+    kary = args.kary
     allreduce = MXNetTreeAllreduce(network)
-    allreduce.compute_trees(2, alternate=True);
-    allreduce.generate_trees_dotfile('mxnettree.dot')
-    print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+    allreduce.backtrack = args.backtrack
+    begin_seed = 100
+    end_seed = 101
+    better = {}
+    same = {}
+    worse = {}
+    comparison_distribution = {'Better': 0, 'Same': 0, 'Worse': 0}
+    total_iterations = 0
+    total_sort_iterations = 0
+    num_seeds = 0
+    # NOTE: It seems sorted won't help much due to random picks to break ties in the during KL algorithm.
+    #       Sometimes better and sometimes worse, most of the time are same. Seed 47 run forever, buggy!
+    #       For example, random seed 8 makes it worse and random seed 9 makes it better. The hypothesis
+    #       is that the limitation is inherent in the decoupling of tree construction and scheduling.
+    for seed in range(begin_seed, end_seed):
+        #print('seed: {}'.format(seed))
+        if seed == 47:
+            continue
+        random.seed(seed)
+        allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
+        if args.gendotfile:
+            allreduce.generate_trees_dotfile('mxnettree.dot')
+        iterations = allreduce.iterations
+        if allreduce.backtrack:
+            print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+            continue
+        allreduce.mxnet_schedule(kary, alternate=True, sort=True, verbose=False)
+        if args.gendotfile:
+            allreduce.generate_trees_dotfile('mxnettree_sort.dot')
+        sort_iterations = allreduce.iterations
+        #print('MXNetTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
+        if iterations > sort_iterations:
+            compare = 'Better'
+            diff = iterations - sort_iterations
+            if diff in better.keys():
+                better[diff] += 1
+            else:
+                better[diff] = 1
+        elif iterations == sort_iterations:
+            compare = 'Same'
+            if iterations in same.keys():
+                same[iterations] += 1
+            else:
+                same[iterations] = 1
+        else:
+            compare = 'Worse'
+            diff = sort_iterations - iterations
+            if diff in worse.keys():
+                worse[diff] += 1
+            else:
+                worse[diff] = 1
+        comparison_distribution[compare] += 1
+        num_seeds += 1
+        total_iterations += iterations
+        total_sort_iterations += sort_iterations
+        print('Seed {}: MXNetTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
+            seed, iterations, sort_iterations, compare))
+    if num_seeds > 1:
+        print('Comparison distribution: {}'.format(comparison_distribution))
+        print('Iteration distribution for Same: {}'.format(same))
+        print('Iteration difference for Better: {}'.format(better))
+        print('Iteration difference for Worse: {}'.format(worse))
+        print('Average iterations: {} (no sort), and {} (sort)'.format(
+            total_iterations / num_seeds, total_sort_iterations / num_seeds))
 
 
 if __name__ == '__main__':
-    test()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dimension', default=4, type=int,
+                        help='network dimension, default is 4')
+    parser.add_argument('--kary', default=2, type=int,
+                        help='generay kary tree, default is 2 (binary)')
+    parser.add_argument('--backtrack', default=False, action='store_true',
+                        help='use backtracking only, default is False')
+    parser.add_argument('--gendotfile', default=False, action='store_true',
+                        help='generate tree dotfiles, default is False')
+
+    args = parser.parse_args()
+
+    test(args)
