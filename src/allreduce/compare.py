@@ -17,12 +17,12 @@ def main():
         multitree_allreduce.compute_trees(2)
         mxnettree_allreduce.compute_best_trees(10, 2)
         print(' Iterations for binary trees - MultiTree: {}, MXNetTree: {}'.format(
-            multitree_allreduce.iterations, mxnettree_allreduce.iterations))
+            multitree_allreduce.timesteps, mxnettree_allreduce.timesteps))
         for kary in range(3, 6):
             multitree_allreduce.compute_trees(kary)
             mxnettree_allreduce.mxnet_schedule(kary)
             print(' Iterations for {}-ary trees - MultiTree: {}, MXNetTree: {}'.format(
-                kary, multitree_allreduce.iterations, mxnettree_allreduce.iterations))
+                kary, multitree_allreduce.timesteps, mxnettree_allreduce.timesteps))
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ class Allreduce(ABC):
     def __init__(self, network):
         self.network = network
         self.trees = None
-        self.iterations = None
+        self.timesteps = None
 
 
     '''
@@ -32,11 +32,11 @@ class Allreduce(ABC):
         # and set up the map for node name and its rank in node_rank
         ranks = {}
         node_rank = {}
-        for rank in range(self.iterations + 1):
+        for rank in range(self.timesteps + 1):
             ranks[rank] = []
 
         for root in range(self.network.nodes):
-            minrank = self.iterations
+            minrank = self.timesteps
             for edge in self.trees[root]:
                 child = '"{}-{}"'.format(root, edge[0])
                 rank = edge[2] + 1
@@ -52,12 +52,12 @@ class Allreduce(ABC):
             for edge in self.trees[root]:
                 child = '"{}-{}"'.format(root, edge[0])
                 parent = '"{}-{}"'.format(root, edge[1])
-                cycle = self.iterations - edge[2]
+                cycle = self.timesteps - edge[2]
                 minlen = node_rank[child] - node_rank[parent] # for strict separation of ranks
                 tree += ''.join('    {} -> {} [ label="{}" minlen={} ];\n'.format(child, parent, cycle, minlen))
 
         tree += '    // note that rank is used in the subgraph\n'
-        for rank in range(self.iterations + 1):
+        for rank in range(self.timesteps + 1):
             if ranks[rank]:
                 level = '    {rank = same;'
                 for node in ranks[rank]:
@@ -67,7 +67,7 @@ class Allreduce(ABC):
 
         tree += '    // node colors\n'
         style = '    {} [style="filled", fillcolor="{}"];\n'
-        for rank in range(self.iterations + 1):
+        for rank in range(self.timesteps + 1):
             if ranks[rank]:
                 tree += ''.join(style.format(node, colors[rank % len(colors)]) for node in ranks[rank])
 

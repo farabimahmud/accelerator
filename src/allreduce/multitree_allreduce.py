@@ -34,7 +34,7 @@ class MultiTreeAllreduce(Allreduce):
 
         # tree construction
         num_trees = 0
-        self.iterations = 0
+        self.timesteps = 0
 
         # sort the roots based on link conflicts during allocation
         sorted_roots = list(range(self.network.nodes))
@@ -42,7 +42,7 @@ class MultiTreeAllreduce(Allreduce):
 
         while num_trees < self.network.nodes:
             if verbose:
-                print('iteration {}'.format(self.iterations))
+                print('timestep {}'.format(self.timesteps))
 
             from_nodes = deepcopy(self.network.from_nodes)
             last_tree_nodes = deepcopy(tree_nodes)
@@ -87,7 +87,7 @@ class MultiTreeAllreduce(Allreduce):
                                     print('    before: {}'.format(self.trees[root]))
                                 from_nodes[parent].remove(child)
                                 tree_nodes[root].append(child)
-                                self.trees[root].append((child, parent, self.iterations))
+                                self.trees[root].append((child, parent, self.timesteps))
                                 if verbose:
                                     print('    after : {}'.format(self.trees[root]))
                                     print('    tree nodes: {}'.format(tree_nodes[root]))
@@ -103,7 +103,7 @@ class MultiTreeAllreduce(Allreduce):
                     if len(tree_nodes[root]) == self.network.nodes:
                         num_trees += 1
                         if verbose:
-                            print('iteration {} - tree {} constructed: {}'.format(self.iterations, root, self.trees[root]))
+                            print('timestep {} - tree {} constructed: {}'.format(self.timesteps, root, self.trees[root]))
                         if num_trees == self.network.nodes:
                             break
 
@@ -136,7 +136,7 @@ class MultiTreeAllreduce(Allreduce):
                                     print('    before: {}'.format(self.trees[root]))
                                 from_nodes[parent].remove(child)
                                 tree_nodes[root].append(child)
-                                self.trees[root].append((child, parent, self.iterations))
+                                self.trees[root].append((child, parent, self.timesteps))
                                 if verbose:
                                     print('    after : {}'.format(self.trees[root]))
                                     print('    tree nodes: {}'.format(tree_nodes[root]))
@@ -144,14 +144,14 @@ class MultiTreeAllreduce(Allreduce):
                     if len(tree_nodes[root]) == self.network.nodes:
                         num_trees += 1
                         if verbose:
-                            print('iteration {} - tree {} constructed: {}'.format(self.iterations, root, self.trees[root]))
+                            print('timestep {} - tree {} constructed: {}'.format(self.timesteps, root, self.trees[root]))
                     if verbose:
                         print('  tree {}: {}'.format(root, self.trees[root]))
 
-            self.iterations += 1
+            self.timesteps += 1
 
         if verbose:
-            print('Total iterations for network size of {}: {}'.format(self.network.nodes, self.iterations))
+            print('Total timesteps for network size of {}: {}'.format(self.network.nodes, self.timesteps))
     # def compute_trees(self, kary, alternate=False, sort=True, verbose=False)
 
 
@@ -165,21 +165,21 @@ def test(args):
     allreduce = MultiTreeAllreduce(network)
     # NOTE: sorted doesn't help for multitree since it only considers available links
     allreduce.compute_trees(kary, alternate=True, sort=False)
-    allreduce.generate_trees_dotfile('multitree.dot')
-    iterations = allreduce.iterations
-    #print('MultiTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+    if args.gendotfile:
+        allreduce.generate_trees_dotfile('multitree.dot')
+    timesteps = allreduce.timesteps
     allreduce.compute_trees(kary, alternate=True, sort=True)
-    allreduce.generate_trees_dotfile('multitree_sort.dot')
-    sort_iterations = allreduce.iterations
-    #print('MultiTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
-    if iterations > sort_iterations:
+    if args.gendotfile:
+        allreduce.generate_trees_dotfile('multitree_sort.dot')
+    sort_timesteps = allreduce.timesteps
+    if timesteps > sort_timesteps:
         compare = 'Better'
-    elif iterations == sort_iterations:
+    elif timesteps == sort_timesteps:
         compare = 'Same'
     else:
         compare = 'Worse'
-    print('MultiTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
-        iterations, sort_iterations, compare))
+    print('MultiTreeAllreduce takes {} timesteps (no sort), and {} timesteps (sort), {}'.format(
+        timesteps, sort_timesteps, compare))
 
 
 if __name__ == '__main__':
@@ -189,6 +189,8 @@ if __name__ == '__main__':
                         help='network dimension, default is 4')
     parser.add_argument('--kary', default=2, type=int,
                         help='generay kary tree, default is 2 (binary)')
+    parser.add_argument('--gendotfile', default=False, action='store_true',
+                        help='generate tree dotfiles, default is False')
 
     args = parser.parse_args()
 
