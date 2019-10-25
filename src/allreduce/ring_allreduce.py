@@ -123,6 +123,7 @@ def test(args):
 
     allreduce = RingAllreduce(network)
     allreduce.compute_trees(verbose=False)
+    allreduce.generate_schedule()
     if args.gendotfile:
         allreduce.generate_ring_dotfile('ring.dot')
         allreduce.generate_trees_dotfile('ring_trees.dot')

@@ -168,10 +168,12 @@ def test(args):
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree.dot')
     timesteps = allreduce.timesteps
+    allreduce.generate_schedule()
     allreduce.compute_trees(kary, alternate=True, sort=True)
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree_sort.dot')
     sort_timesteps = allreduce.timesteps
+    allreduce.generate_schedule()
     if timesteps > sort_timesteps:
         compare = 'Better'
     elif timesteps == sort_timesteps:

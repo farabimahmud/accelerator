@@ -5,6 +5,8 @@ class Allreduce(ABC):
         self.network = network
         self.trees = None
         self.timesteps = None
+        self.reduce_scatter_schedule = None
+        self.all_gather_schedule = None
 
 
     '''
@@ -13,6 +15,54 @@ class Allreduce(ABC):
     @abstractmethod
     def compute_trees(self, kary, alternate=False, sort=True, verbose=False):
         pass
+
+
+    '''
+    generate_schedule()
+    @verbose: print the generated schedules
+
+    desc - generate reduce_scatter_schedule and all_gather_schedule from trees
+    '''
+    def generate_schedule(self, verbose=False):
+        # initialize the schedules
+        self.reduce_scatter_schedule = {}
+        self.all_gather_schedule = {}
+
+        # construct schedules for each node from trees
+        for node in range(self.network.nodes):
+            self.reduce_scatter_schedule[node] = {}
+            self.all_gather_schedule[node] = {}
+
+        for root in range(self.network.nodes):
+            for edge in self.trees[root]:
+                # reduce-scatter
+                rs_child = edge[0]
+                rs_parent = edge[1]
+                rs_timestep = self.timesteps - edge[2] - 1
+
+                # send from rs_child to rs_parent for tree root at rs_timestep
+                if rs_timestep not in self.reduce_scatter_schedule[rs_child].keys():
+                    self.reduce_scatter_schedule[rs_child][rs_timestep] = []
+                self.reduce_scatter_schedule[rs_child][rs_timestep].append((root, rs_parent))
+
+                # all-gather
+                ag_child = edge[0]
+                ag_parent = edge[1]
+                ag_timestep = edge[2]
+
+                # send from ag_parent to ag_child for tree root at ag_timestep
+                if ag_timestep not in self.all_gather_schedule[ag_parent].keys():
+                    self.all_gather_schedule[ag_parent][ag_timestep] = {}
+                if root not in self.all_gather_schedule[ag_parent][ag_timestep].keys():
+                    self.all_gather_schedule[ag_parent][ag_timestep][root] = []
+                self.all_gather_schedule[ag_parent][ag_timestep][root].append(ag_child)
+
+        if verbose:
+            for node in range(self.network.nodes):
+                print('Accelerator {}:'.format(node))
+                print('  reduce-scatter schedule: {}'.format(self.reduce_scatter_schedule[node]))
+                print('  all-gather schedule: {}'.format(self.all_gather_schedule[node]))
+    # def generate_schedule(self, verbose=False)
 
 
     '''

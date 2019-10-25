@@ -1442,6 +1442,7 @@ def test(args):
         if args.gendotfile:
             allreduce.generate_trees_dotfile('mxnettree.dot')
         timesteps = allreduce.timesteps
+        allreduce.generate_schedule()
         if allreduce.backtrack:
             print('MXNetTreeAllreduce takes {} timesteps'.format(allreduce.timesteps))
             continue
@@ -1449,6 +1450,7 @@ def test(args):
         if args.gendotfile:
             allreduce.generate_trees_dotfile('mxnettree_sort.dot')
         sort_timesteps = allreduce.timesteps
+        allreduce.generate_schedule()
         if timesteps > sort_timesteps:
             compare = 'Better'
             diff = timesteps - sort_timesteps
