@@ -1411,6 +1411,64 @@ class MXNetTreeAllreduce(Allreduce):
     #def topdown_schedule(self, kary, alternative=True, cross_level=True, verbose=False)
 
 
+    '''
+    generate_schedule()
+    @verbose: print the generated schedules
+
+    desc - generate reduce_scatter_schedule and all_gather_schedule from trees
+    '''
+    def generate_schedule(self, verbose=False):
+        # compute parent-children dependency
+        trees_parent = {}
+        trees_children = {}
+        for root in range(self.network.nodes):
+            trees_parent[root] = {}
+            trees_parent[root][root] = None
+            trees_children[root] = {}
+            for node in range(self.network.nodes):
+                trees_children[root][node] = []
+            for child_parent_row in self.conflict_trees[root]:
+                for child, parent in child_parent_row:
+                    trees_parent[root][child] = parent
+                    trees_children[root][parent].append(child)
+
+        # initialize the schedules
+        self.reduce_scatter_schedule = {}
+        self.all_gather_schedule = {}
+
+        trees = deepcopy(self.conflict_trees)
+
+        for node in range(self.network.nodes):
+            self.reduce_scatter_schedule[node] = [{}]
+            self.all_gather_schedule[node] = [{}]
+
+        change = True
+        while change:
+            change = False
+
+            for root in range(self.network.nodes):
+                if trees[root]:
+                    child_parent_row = trees[root].pop()
+                    for child, parent in child_parent_row:
+                        # TODO: It seems dict is ordered by key in python implementation, may optimize later
+                        self.reduce_scatter_schedule[child][0][root] = (parent, trees_children[root][child])
+                        if root not in self.all_gather_schedule[parent][0].keys():
+                            self.all_gather_schedule[parent][0][root] = ([], trees_parent[root][parent])
+                        self.all_gather_schedule[parent][0][root][0].append(child)
+                        change = True
+
+        if verbose:
+            for node in range(self.network.nodes):
+                print('Accelerator {}:'.format(node))
+                print('  reduce-scatter schedule:')
+                for timestep, schedule in enumerate(self.reduce_scatter_schedule[node]):
+                    print('    timestep {}: {}'.format(timestep, schedule))
+                print('  all-gather schedule:')
+                for timestep, schedule in enumerate(self.all_gather_schedule[node]):
+                    print('    timestep {}: {}'.format(timestep, schedule))
+    # def generate_schedule(self, verbose=False)
+
+
 def test(args):
     dimension = args.dimension
     nodes = dimension * dimension
@@ -1442,7 +1500,7 @@ def test(args):
         if args.gendotfile:
             allreduce.generate_trees_dotfile('mxnettree.dot')
         timesteps = allreduce.timesteps
-        allreduce.generate_schedule()
+        allreduce.generate_schedule(verbose=False)
         if allreduce.backtrack:
             print('MXNetTreeAllreduce takes {} timesteps'.format(allreduce.timesteps))
             continue

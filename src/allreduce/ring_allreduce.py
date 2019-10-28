@@ -80,6 +80,53 @@ class RingAllreduce(Allreduce):
 
 
     '''
+    generate_schedule()
+    @verbose: print the generated schedules
+
+    desc - generate reduce_scatter_schedule and all_gather_schedule from ring,
+           verified with generate_schedule in MultiTree
+    '''
+    def generate_schedule(self, verbose=False):
+        # initialize the schedules
+        self.reduce_scatter_schedule = {}
+        self.all_gather_schedule = {}
+
+        for node in range(self.network.nodes):
+            self.reduce_scatter_schedule[node] = []
+            self.all_gather_schedule[node] = []
+
+            index = self.ring.index(node)
+            parent = self.ring[index - 1]
+            child = self.ring[(index + 1) % self.network.nodes]
+
+            # reduce-scatter scheduled from 'leaf'
+            rs_subflow = child
+            self.reduce_scatter_schedule[node].append({rs_subflow: (parent, [])})
+            # all-gather scheduled from 'root'
+            ag_subflow = node
+            self.all_gather_schedule[node].append({ag_subflow: ([child], None)})
+            # add remianing schedules
+            for i in range(self.network.nodes - 2):
+                # reduce-scatter
+                rs_subflow = self.ring[(index + i + 2) % self.network.nodes]
+                self.reduce_scatter_schedule[node].append({rs_subflow: (parent, [child])})
+
+                # all-gather
+                ag_subflow = self.ring[index - i - 1]
+                self.all_gather_schedule[node].append({ag_subflow: ([child], parent)})
+
+            if verbose:
+                print('Accelerator {}:'.format(node))
+                print('  reduce-scatter schedule:')
+                for timestep, schedule in enumerate(self.reduce_scatter_schedule[node]):
+                    print('    timestep {}: {}'.format(timestep, schedule))
+                print('  all-gather schedule:')
+                for timestep, schedule in enumerate(self.all_gather_schedule[node]):
+                    print('    timestep {}: {}'.format(timestep, schedule))
+    # def generate_schedule(self, verbose=False)
+
+
+    '''
     generate_ring_dotfile() - generate dotfile for computed rings
     @filename: name of dotfile
     '''
@@ -123,7 +170,7 @@ def test(args):
 
     allreduce = RingAllreduce(network)
     allreduce.compute_trees(verbose=False)
-    allreduce.generate_schedule()
+    allreduce.generate_schedule(verbose=False)
     if args.gendotfile:
         allreduce.generate_ring_dotfile('ring.dot')
         allreduce.generate_trees_dotfile('ring_trees.dot')

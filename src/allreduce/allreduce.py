@@ -5,6 +5,50 @@ class Allreduce(ABC):
         self.network = network
         self.trees = None
         self.timesteps = None
+        '''
+        schedules are organized as list of list, the list with lower index
+        in the schedule should be scheduled earlier.
+        - reduce_scatter_schedule:
+            subflow: (parent, [dependent children]) // subflow is 'tree' root
+        - all_gather_schedule:
+            subflow: ([children], dependent parent)
+        Ring:
+            0->1->2->3->0
+            reduce_scatter_schedule[0] = [
+                {3: (1, [])},
+                {2: (1, [3])},
+                {1: (1, [3])}
+            ]
+            all_gather_schedule[0] = [
+                {0: ([1], None)},
+                {3: ([1], 3)},
+                {2: ([1], 3)}
+            ]
+        MXNet: (only dependencies among children and parent)
+              Tree 0      Tree 1        Tree 2        Tree 3
+                0           1             2             3
+              0   1       1   3         2   3         3   1
+            0  2 1  3   1  0 3  2     2  0 3  1     3  2 1  0
+            reduce_scatter_schedule[3] = [
+                {0: (1, []), 1: (1, [2]), 2: (2, [1])}
+            ]
+            all_gather_schedule[3] = [
+                {1: ([2], 1), 2: ([1], 2), 3: ([1, 2], None)}
+            ]
+        MultTree:
+            Timestep    Tree 0      Tree 1        Tree 2        Tree 3
+                2         0           1             2             3
+                1          2           3             0             1
+                0       1   3       0   2         3   1         2   0
+            reduce_scatter_schedule[0] = [
+                {1: (1, []), 3: (1, [])},
+                {2: (2, [1])},
+            ]
+            all_gather_schedule[0] = [
+                {0: ([2], None)},
+                {0: ([1], None), 2: ([1], 2)}
+            ]
+        '''
         self.reduce_scatter_schedule = None
         self.all_gather_schedule = None
 
@@ -23,46 +67,9 @@ class Allreduce(ABC):
 
     desc - generate reduce_scatter_schedule and all_gather_schedule from trees
     '''
+    @abstractmethod
     def generate_schedule(self, verbose=False):
-        # initialize the schedules
-        self.reduce_scatter_schedule = {}
-        self.all_gather_schedule = {}
-
-        # construct schedules for each node from trees
-        for node in range(self.network.nodes):
-            self.reduce_scatter_schedule[node] = {}
-            self.all_gather_schedule[node] = {}
-
-        for root in range(self.network.nodes):
-            for edge in self.trees[root]:
-                # reduce-scatter
-                rs_child = edge[0]
-                rs_parent = edge[1]
-                rs_timestep = self.timesteps - edge[2] - 1
-
-                # send from rs_child to rs_parent for tree root at rs_timestep
-                if rs_timestep not in self.reduce_scatter_schedule[rs_child].keys():
-                    self.reduce_scatter_schedule[rs_child][rs_timestep] = []
-                self.reduce_scatter_schedule[rs_child][rs_timestep].append((root, rs_parent))
-
-                # all-gather
-                ag_child = edge[0]
-                ag_parent = edge[1]
-                ag_timestep = edge[2]
-
-                # send from ag_parent to ag_child for tree root at ag_timestep
-                if ag_timestep not in self.all_gather_schedule[ag_parent].keys():
-                    self.all_gather_schedule[ag_parent][ag_timestep] = {}
-                if root not in self.all_gather_schedule[ag_parent][ag_timestep].keys():
-                    self.all_gather_schedule[ag_parent][ag_timestep][root] = []
-                self.all_gather_schedule[ag_parent][ag_timestep][root].append(ag_child)
-
-        if verbose:
-            for node in range(self.network.nodes):
-                print('Accelerator {}:'.format(node))
-                print('  reduce-scatter schedule: {}'.format(self.reduce_scatter_schedule[node]))
-                print('  all-gather schedule: {}'.format(self.all_gather_schedule[node]))
-    # def generate_schedule(self, verbose=False)
+        pass
 
 
     '''
