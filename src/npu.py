@@ -17,23 +17,25 @@ class NPU:
         return cycles
 
     def inference(self, model, training=False):
-        avg_bw_file = open(self.args.outdir + '/' + model.name + '_avg_bw.csv', 'w')
-        max_bw_file = open(self.args.outdir + '/' + model.name + '_max_bw.csv', 'w')
-        cycle_file  = open(self.args.outdir + '/' + model.name + '_cycles.csv', 'w')
-        detail_file = open(self.args.outdir + '/' + model.name + '_detail.csv', 'w')
+        # only dump when configured, it is too slow
+        if self.args.dump:
+            avg_bw_file = open(self.args.outdir + '/' + model.name + '_avg_bw.csv', 'w')
+            max_bw_file = open(self.args.outdir + '/' + model.name + '_max_bw.csv', 'w')
+            cycle_file  = open(self.args.outdir + '/' + model.name + '_cycles.csv', 'w')
+            detail_file = open(self.args.outdir + '/' + model.name + '_detail.csv', 'w')
 
-        avg_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tDRAM IFMAP Read BW,\tDRAM Filter Read BW,\tDRAM OFMAP Write BW,\tSRAM Read BW,\tSRAM OFMAP Write BW,\n')
-        max_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tMax DRAM IFMAP Read BW,\tMax DRAM Filter Read BW,\tMax DRAM OFMAP Write BW,\tMax SRAM Read BW,\tMax SRAM OFMAP Write BW,\n')
-        cycle_file.write('Layer,\tCycles,\t% Utilization,\n')
-        detail_log = 'Layer,' + \
-                     '\tDRAM_IFMAP_start,\tDRAM_IFMAP_stop,\tDRAM_IFMAP_bytes,' + \
-                     '\tDRAM_Filter_start,\tDRAM_Filter_stop,\tDRAM_Filter_bytes,' + \
-                     '\tDRAM_OFMAP_start,\tDRAM_OFMAP_stop,\tDRAM_OFMAP_bytes,' + \
-                     '\tSRAM_read_start,\tSRAM_read_stop,\tSRAM_read_bytes,' + \
-                     '\tSRAM_write_start,\tSRAM_write_stop,\tSRAM_write_bytes,\n'
-        detail_file.write(detail_log)
+            avg_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tDRAM IFMAP Read BW,\tDRAM Filter Read BW,\tDRAM OFMAP Write BW,\tSRAM Read BW,\tSRAM OFMAP Write BW,\n')
+            max_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tMax DRAM IFMAP Read BW,\tMax DRAM Filter Read BW,\tMax DRAM OFMAP Write BW,\tMax SRAM Read BW,\tMax SRAM OFMAP Write BW,\n')
+            cycle_file.write('Layer,\tCycles,\t% Utilization,\n')
+            detail_log = 'Layer,' + \
+                         '\tDRAM_IFMAP_start,\tDRAM_IFMAP_stop,\tDRAM_IFMAP_bytes,' + \
+                         '\tDRAM_Filter_start,\tDRAM_Filter_stop,\tDRAM_Filter_bytes,' + \
+                         '\tDRAM_OFMAP_start,\tDRAM_OFMAP_stop,\tDRAM_OFMAP_bytes,' + \
+                         '\tSRAM_read_start,\tSRAM_read_stop,\tSRAM_read_bytes,' + \
+                         '\tSRAM_write_start,\tSRAM_write_stop,\tSRAM_write_bytes,\n'
+            detail_file.write(detail_log)
 
-        bw_head_str = str(self.args.ifmap_sram_size) + ',\t' + str(self.args.filter_sram_size) + ',\t' + str(self.args.ofmap_sram_size) + ',\t'
+            bw_head_str = str(self.args.ifmap_sram_size) + ',\t' + str(self.args.filter_sram_size) + ',\t' + str(self.args.ofmap_sram_size) + ',\t'
 
         print("\nFeed-Forward ...")
 
@@ -60,11 +62,18 @@ class NPU:
 
             stride = model.layers[l]['stride']
 
-            sram_read_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_read.csv'
-            sram_write_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_write.csv'
-            dram_filter_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_filter_read.csv'
-            dram_ifmap_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_ifmap_read.csv'
-            dram_ofmap_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_ofmap_write.csv'
+            if self.args.dump:
+                sram_read_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_read.csv'
+                sram_write_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_write.csv'
+                dram_filter_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_filter_read.csv'
+                dram_ifmap_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_ifmap_read.csv'
+                dram_ofmap_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_ofmap_write.csv'
+            else:
+                sram_read_trace_file = None
+                sram_write_trace_file = None
+                dram_filter_trace_file = None
+                dram_ifmap_trace_file = None
+                dram_ofmap_trace_file = None
 
             bw_str, detailed_str, util, cycles = tg.gen_all_traces(
                     array_h = self.args.pe_array_height,
@@ -92,56 +101,59 @@ class NPU:
             total_cycles += int(cycles)
             total_util += util * int(cycles)
 
-            avg_bw_log = bw_head_str + name + ',\t' + bw_str + '\n'
-            avg_bw_file.write(avg_bw_log)
+            if self.args.dump:
+                avg_bw_log = bw_head_str + name + ',\t' + bw_str + '\n'
+                avg_bw_file.write(avg_bw_log)
 
-            detailed_log = name + ',\t' + detailed_str + '\n'
-            detail_file.write(detailed_log)
+                detailed_log = name + ',\t' + detailed_str + '\n'
+                detail_file.write(detailed_log)
 
-            max_bw_log = bw_head_str + name + ',\t'
-            max_bw_log += tg.gen_max_bw_numbers(
-                    sram_read_trace_file = sram_read_trace_file,
-                    sram_write_trace_file = sram_write_trace_file,
-                    dram_filter_trace_file = dram_filter_trace_file,
-                    dram_ifmap_trace_file = dram_ifmap_trace_file,
-                    dram_ofmap_trace_file = dram_ofmap_trace_file
-                    )
-            max_bw_file.write(max_bw_log + '\n')
+                max_bw_log = bw_head_str + name + ',\t'
+                max_bw_log += tg.gen_max_bw_numbers(
+                        sram_read_trace_file = sram_read_trace_file,
+                        sram_write_trace_file = sram_write_trace_file,
+                        dram_filter_trace_file = dram_filter_trace_file,
+                        dram_ifmap_trace_file = dram_ifmap_trace_file,
+                        dram_ofmap_trace_file = dram_ofmap_trace_file
+                        )
+                max_bw_file.write(max_bw_log + '\n')
 
-            cycle_file.write(name + ',\t' + cycles + ',\t' + str(util) + ',\n')
+                cycle_file.write(name + ',\t' + cycles + ',\t' + str(util) + ',\n')
 
-        total_util /= total_cycles
-        cycle_file.write('Total,\t' + str(total_cycles) + ',\t' + str(total_util))
+        if self.args.dump:
+            total_util /= total_cycles
+            cycle_file.write('Total,\t' + str(total_cycles) + ',\t' + str(total_util))
 
-        avg_bw_file.close()
-        max_bw_file.close()
-        cycle_file.close()
-        detail_file.close()
+            avg_bw_file.close()
+            max_bw_file.close()
+            cycle_file.close()
+            detail_file.close()
 
         return total_cycles
     # inference() end
 
     def backprop(self, model):
-        avg_bw_file = open(self.args.outdir + '/' + model.name + '_backprop_avg_bw.csv', 'w')
-        max_bw_file = open(self.args.outdir + '/' + model.name + '_backprop_max_bw.csv', 'w')
-        cycle_file  = open(self.args.outdir + '/' + model.name + '_backprop_cycles.csv', 'w')
-        detail_file = open(self.args.outdir + '/' + model.name + '_backprop_detail.csv', 'w')
+        if self.args.dump:
+            avg_bw_file = open(self.args.outdir + '/' + model.name + '_backprop_avg_bw.csv', 'w')
+            max_bw_file = open(self.args.outdir + '/' + model.name + '_backprop_max_bw.csv', 'w')
+            cycle_file  = open(self.args.outdir + '/' + model.name + '_backprop_cycles.csv', 'w')
+            detail_file = open(self.args.outdir + '/' + model.name + '_backprop_detail.csv', 'w')
 
-        avg_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tDRAM IFMAP Read BW,\tDRAM Filter Read BW,\tDRAM OFMAP Gradient Read BW,\tDRAM IFMAP Gradient Write BW,\tDRAM Filter Gradient Write BW,\tSRAM Read BW,\tSRAM IFMAP Gradient Write BW,\tSRAM Filter Gradient Write BW,\n')
-        max_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tMax DRAM IFMAP Read BW,\tMax DRAM Filter Read BW,\tMAX DRAM OFMAP Gradient Read BW,\tMax DRAM IFMAP Gradient Write BW,\tMax DRAM Filter Gradient Write BW,\tMax SRAM Read BW,\tMax SRAM IFMAP Gradient Write BW,\tMax SRAM Filter Gradient Write BW,\n')
-        cycle_file.write('Layer,\tCycles,\t% Utilization,\n')
-        detail_log = 'Layer,' + \
-                     '\tDRAM_IFMAP_start,\tDRAM_IFMAP_stop,\tDRAM_IFMAP_bytes,' + \
-                     '\tDRAM_Filter_start,\tDRAM_Filter_stop,\tDRAM_Filter_bytes,' + \
-                     '\tDRAM_OFMAP_Gradient_start,\tDRAM_OFMAP_Gradient_stop,\tDRAM_OFMAP_Gradient_bytes,' + \
-                     '\tDRAM_IFMAP_Gradient_start,\tDRAM_IFMAP_Gradient_stop,\tDRAM_IFMAP_Gradient_bytes,' + \
-                     '\tDRAM_Filter_Gradient_start,\tDRAM_Filter_Gradient_stop,\tDRAM_Filter_Gradient_bytes,' + \
-                     '\tSRAM_read_start,\tSRAM_read_stop,\tSRAM_read_bytes,' + \
-                     '\tSRAM_IFMAP_Gradient_write_start,\tSRAM_IFMAP_Gradient_write_stop,\tSRAM_IFMAP_Gradient_write_bytes,' + \
-                     '\tSRAM_Filter_Gradient_write_start,\tSRAM_Filter_Gradient_write_stop,\tSRAM_Filter_Gradient_write_bytes,\n'
-        detail_file.write(detail_log)
+            avg_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tDRAM IFMAP Read BW,\tDRAM Filter Read BW,\tDRAM OFMAP Gradient Read BW,\tDRAM IFMAP Gradient Write BW,\tDRAM Filter Gradient Write BW,\tSRAM Read BW,\tSRAM IFMAP Gradient Write BW,\tSRAM Filter Gradient Write BW,\n')
+            max_bw_file.write('IFMAP SRAM Size,\tFilter SRAM Size,\tOFMAP SRAM Size,\tConv Layer Num,\tMax DRAM IFMAP Read BW,\tMax DRAM Filter Read BW,\tMAX DRAM OFMAP Gradient Read BW,\tMax DRAM IFMAP Gradient Write BW,\tMax DRAM Filter Gradient Write BW,\tMax SRAM Read BW,\tMax SRAM IFMAP Gradient Write BW,\tMax SRAM Filter Gradient Write BW,\n')
+            cycle_file.write('Layer,\tCycles,\t% Utilization,\n')
+            detail_log = 'Layer,' + \
+                         '\tDRAM_IFMAP_start,\tDRAM_IFMAP_stop,\tDRAM_IFMAP_bytes,' + \
+                         '\tDRAM_Filter_start,\tDRAM_Filter_stop,\tDRAM_Filter_bytes,' + \
+                         '\tDRAM_OFMAP_Gradient_start,\tDRAM_OFMAP_Gradient_stop,\tDRAM_OFMAP_Gradient_bytes,' + \
+                         '\tDRAM_IFMAP_Gradient_start,\tDRAM_IFMAP_Gradient_stop,\tDRAM_IFMAP_Gradient_bytes,' + \
+                         '\tDRAM_Filter_Gradient_start,\tDRAM_Filter_Gradient_stop,\tDRAM_Filter_Gradient_bytes,' + \
+                         '\tSRAM_read_start,\tSRAM_read_stop,\tSRAM_read_bytes,' + \
+                         '\tSRAM_IFMAP_Gradient_write_start,\tSRAM_IFMAP_Gradient_write_stop,\tSRAM_IFMAP_Gradient_write_bytes,' + \
+                         '\tSRAM_Filter_Gradient_write_start,\tSRAM_Filter_Gradient_write_stop,\tSRAM_Filter_Gradient_write_bytes,\n'
+            detail_file.write(detail_log)
 
-        bw_head_str = str(self.args.ifmap_sram_size) + ',\t' + str(self.args.filter_sram_size) + ',\t' + str(self.args.ofmap_sram_size) + ',\t'
+            bw_head_str = str(self.args.ifmap_sram_size) + ',\t' + str(self.args.filter_sram_size) + ',\t' + str(self.args.ofmap_sram_size) + ',\t'
 
         print('\nBackward Propagation ...')
 
@@ -163,14 +175,24 @@ class NPU:
 
             stride = model.layers[l]['stride']
 
-            sram_read_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_sram_read.csv'
-            sram_ifmap_gradient_write_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_ifmap_gradient_write.csv'
-            sram_filter_gradient_write_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_filter_gradient_write.csv'
-            dram_ifmap_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_dram_ifmap_read.csv'
-            dram_filter_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_dram_filter_read.csv'
-            dram_ofmap_gradient_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_dram_ofmap_gradient_read.csv'
-            dram_filter_gradient_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_filter_gradient_write.csv'
-            dram_ifmap_gradient_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_ifmap_gradient_write.csv'
+            if self.args.dump:
+                sram_read_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_sram_read.csv'
+                sram_ifmap_gradient_write_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_ifmap_gradient_write.csv'
+                sram_filter_gradient_write_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_sram_filter_gradient_write.csv'
+                dram_ifmap_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_dram_ifmap_read.csv'
+                dram_filter_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_dram_filter_read.csv'
+                dram_ofmap_gradient_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_backprop_dram_ofmap_gradient_read.csv'
+                dram_filter_gradient_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_filter_gradient_write.csv'
+                dram_ifmap_gradient_trace_file = self.args.outdir + '/' + model.name + '_' + name + '_dram_ifmap_gradient_write.csv'
+            else:
+                sram_read_trace_file = None
+                sram_ifmap_gradient_write_trace_file = None
+                sram_filter_gradient_write_trace_file = None
+                dram_ifmap_trace_file = None
+                dram_filter_trace_file = None
+                dram_ofmap_gradient_trace_file = None
+                dram_filter_gradient_trace_file = None
+                dram_ifmap_gradient_trace_file = None
 
             bw_str, detailed_str, cycles, util = bp.backprop(
                     array_h = self.args.pe_array_height,
@@ -203,34 +225,36 @@ class NPU:
             total_cycles += cycles
             total_util += util * cycles
 
-            avg_bw_log = bw_head_str + name + ',\t' + bw_str + '\n'
-            avg_bw_file.write(avg_bw_log)
+            if self.args.dump:
+                avg_bw_log = bw_head_str + name + ',\t' + bw_str + '\n'
+                avg_bw_file.write(avg_bw_log)
 
-            detailed_log = name + ',\t' + detailed_str + '\n'
-            detail_file.write(detailed_log)
+                detailed_log = name + ',\t' + detailed_str + '\n'
+                detail_file.write(detailed_log)
 
-            max_bw_log = bw_head_str + name + ',\t'
-            max_bw_log += bp.gen_max_bw_numbers(
-                    sram_read_trace_file = sram_read_trace_file,
-                    sram_ifmap_gradient_write_trace_file = sram_ifmap_gradient_write_trace_file,
-                    sram_filter_gradient_write_trace_file = sram_filter_gradient_write_trace_file,
-                    dram_ifmap_trace_file = dram_ifmap_trace_file,
-                    dram_filter_trace_file = dram_filter_trace_file,
-                    dram_ofmap_gradient_trace_file = dram_ofmap_gradient_trace_file,
-                    dram_filter_gradient_trace_file = dram_filter_gradient_trace_file,
-                    dram_ifmap_gradient_trace_file = dram_ifmap_gradient_trace_file
-                    )
-            max_bw_file.write(max_bw_log + '\n')
+                max_bw_log = bw_head_str + name + ',\t'
+                max_bw_log += bp.gen_max_bw_numbers(
+                        sram_read_trace_file = sram_read_trace_file,
+                        sram_ifmap_gradient_write_trace_file = sram_ifmap_gradient_write_trace_file,
+                        sram_filter_gradient_write_trace_file = sram_filter_gradient_write_trace_file,
+                        dram_ifmap_trace_file = dram_ifmap_trace_file,
+                        dram_filter_trace_file = dram_filter_trace_file,
+                        dram_ofmap_gradient_trace_file = dram_ofmap_gradient_trace_file,
+                        dram_filter_gradient_trace_file = dram_filter_gradient_trace_file,
+                        dram_ifmap_gradient_trace_file = dram_ifmap_gradient_trace_file
+                        )
+                max_bw_file.write(max_bw_log + '\n')
 
-            cycle_file.write(name + ',\t' + str(cycles) + ',\t' + str(util) + ',\n')
+                cycle_file.write(name + ',\t' + str(cycles) + ',\t' + str(util) + ',\n')
 
-        total_util /= total_cycles
-        cycle_file.write('Total,\t' + str(total_cycles) + ',\t' + str(total_util) + ',\n')
+        if self.args.dump:
+            total_util /= total_cycles
+            cycle_file.write('Total,\t' + str(total_cycles) + ',\t' + str(total_util) + ',\n')
 
-        avg_bw_file.close()
-        max_bw_file.close()
-        cycle_file.close()
-        detail_file.close()
+            avg_bw_file.close()
+            max_bw_file.close()
+            cycle_file.close()
+            detail_file.close()
 
         return total_cycles
     # end of backprop()

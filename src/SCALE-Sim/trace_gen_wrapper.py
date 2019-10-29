@@ -26,6 +26,13 @@ def gen_all_traces(
         dram_ofmap_trace_file = "dram_ofmap_write.csv"
     ):
 
+    if sram_read_trace_file == None or sram_write_trace_file == None or \
+            dram_filter_trace_file == None or dram_ifmap_trace_file == None or \
+            dram_ofmap_trace_file == None:
+        dump = False
+    else:
+        dump = True
+
     sram_cycles = 0
     util        = 0
 
@@ -71,36 +78,41 @@ def gen_all_traces(
                 sram_write_trace_file = sram_write_trace_file
             )
 
-    #print("Generating DRAM traffic")
-    dram.dram_trace_read_v2(
-        sram_sz=ifmap_sram_size,
-        word_sz_bytes=word_size_bytes,
-        min_addr=ifmap_base, max_addr=filt_base,
-        sram_trace_file=sram_read_trace_file,
-        dram_trace_file=dram_ifmap_trace_file,
-    )
+    if dump:
+        #print("Generating DRAM traffic")
+        dram.dram_trace_read_v2(
+            sram_sz=ifmap_sram_size,
+            word_sz_bytes=word_size_bytes,
+            min_addr=ifmap_base, max_addr=filt_base,
+            sram_trace_file=sram_read_trace_file,
+            dram_trace_file=dram_ifmap_trace_file,
+        )
 
-    dram.dram_trace_read_v2(
-        sram_sz= filter_sram_size,
-        word_sz_bytes= word_size_bytes,
-        min_addr=filt_base, max_addr=ofmap_base,
-        sram_trace_file= sram_read_trace_file,
-        dram_trace_file= dram_filter_trace_file,
-    )
+        dram.dram_trace_read_v2(
+            sram_sz= filter_sram_size,
+            word_sz_bytes= word_size_bytes,
+            min_addr=filt_base, max_addr=ofmap_base,
+            sram_trace_file= sram_read_trace_file,
+            dram_trace_file= dram_filter_trace_file,
+        )
 
-    dram.dram_trace_write(
-        ofmap_sram_size= ofmap_sram_size,
-        data_width_bytes= word_size_bytes,
-        sram_write_trace_file= sram_write_trace_file,
-        dram_write_trace_file= dram_ofmap_trace_file
-    )
+        dram.dram_trace_write(
+            ofmap_sram_size= ofmap_sram_size,
+            data_width_bytes= word_size_bytes,
+            sram_write_trace_file= sram_write_trace_file,
+            dram_write_trace_file= dram_ofmap_trace_file
+        )
+
+        bw_numbers, detailed_log  = gen_bw_numbers(dram_ifmap_trace_file, dram_filter_trace_file,
+                                     dram_ofmap_trace_file, sram_write_trace_file,
+                                     sram_read_trace_file)
+                                     #array_h, array_w)
+    else:
+        bw_numbers = None
+        detailed_log = None
 
     print("Average utilization : \t"  + str(util) + " %")
     print("Cycles for compute  : \t"  + str(sram_cycles) + " cycles")
-    bw_numbers, detailed_log  = gen_bw_numbers(dram_ifmap_trace_file, dram_filter_trace_file,
-                                 dram_ofmap_trace_file, sram_write_trace_file,
-                                 sram_read_trace_file)
-                                 #array_h, array_w)
 
     return bw_numbers, detailed_log, util, sram_cycles
 

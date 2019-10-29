@@ -31,6 +31,18 @@ def backprop(
         dram_ifmap_gradient_trace_file = 'dram_ifmap_gradient_write.csv'
         ):
 
+    if sram_read_trace_file == None or \
+       sram_ifmap_gradient_write_trace_file == None or \
+       sram_filter_gradient_write_trace_file == None or \
+       dram_ifmap_trace_file == None or \
+       dram_filter_trace_file == None or \
+       dram_ofmap_gradient_trace_file == None or \
+       dram_filter_gradient_trace_file == None or \
+       dram_ifmap_gradient_trace_file == None:
+        dump = False
+    else:
+        dump = True
+
     sram_cycles = 0
     util        = 0
 
@@ -53,66 +65,70 @@ def backprop(
                     sram_filter_gradient_write_trace_file = sram_filter_gradient_write_trace_file
                     )
 
-    # IFMAP dram read traces
-    dram.dram_trace_read_v2(
-            sram_sz = ifmap_sram_size,
-            word_sz_bytes = word_size_bytes,
-            min_addr = ifmap_base, max_addr = filter_base,
-            sram_trace_file = sram_read_trace_file,
-            dram_trace_file = dram_ifmap_trace_file
-            )
+    if dump:
+        # IFMAP dram read traces
+        dram.dram_trace_read_v2(
+                sram_sz = ifmap_sram_size,
+                word_sz_bytes = word_size_bytes,
+                min_addr = ifmap_base, max_addr = filter_base,
+                sram_trace_file = sram_read_trace_file,
+                dram_trace_file = dram_ifmap_trace_file
+                )
 
-    # Filter dram read traces
-    # NOTE: use ifmap sram when backpropagate
-    dram.dram_trace_read_v2(
-            sram_sz = ifmap_sram_size,
-            word_sz_bytes = word_size_bytes,
-            min_addr = filter_base, max_addr = ofmap_base,
-            sram_trace_file = sram_read_trace_file,
-            dram_trace_file = dram_filter_trace_file
-            )
+        # Filter dram read traces
+        # NOTE: use ifmap sram when backpropagate
+        dram.dram_trace_read_v2(
+                sram_sz = ifmap_sram_size,
+                word_sz_bytes = word_size_bytes,
+                min_addr = filter_base, max_addr = ofmap_base,
+                sram_trace_file = sram_read_trace_file,
+                dram_trace_file = dram_filter_trace_file
+                )
 
-    # OFMAP gradient dram read traces
-    # NOTE: use filter sram when backpropagate
-    dram.dram_trace_read_v2(
-            sram_sz = filter_sram_size,
-            word_sz_bytes = word_size_bytes,
-            min_addr = ofmap_gradient_base, max_addr = ifmap_gradient_base,
-            sram_trace_file = sram_read_trace_file,
-            dram_trace_file = dram_ofmap_gradient_trace_file
-            )
+        # OFMAP gradient dram read traces
+        # NOTE: use filter sram when backpropagate
+        dram.dram_trace_read_v2(
+                sram_sz = filter_sram_size,
+                word_sz_bytes = word_size_bytes,
+                min_addr = ofmap_gradient_base, max_addr = ifmap_gradient_base,
+                sram_trace_file = sram_read_trace_file,
+                dram_trace_file = dram_ofmap_gradient_trace_file
+                )
 
-    # IFMAP gradient dram write traces
-    # NOTE: use ofmap sram for gradient write
-    dram.dram_trace_write(
-            ofmap_sram_size = ofmap_sram_size,
-            data_width_bytes = word_size_bytes,
-            sram_write_trace_file = sram_ifmap_gradient_write_trace_file,
-            dram_write_trace_file = dram_ifmap_gradient_trace_file
-            )
+        # IFMAP gradient dram write traces
+        # NOTE: use ofmap sram for gradient write
+        dram.dram_trace_write(
+                ofmap_sram_size = ofmap_sram_size,
+                data_width_bytes = word_size_bytes,
+                sram_write_trace_file = sram_ifmap_gradient_write_trace_file,
+                dram_write_trace_file = dram_ifmap_gradient_trace_file
+                )
 
-    # Filter gradient dram write traces
-    # NOTE: use ofmap sram for gradient write
-    dram.dram_trace_write(
-            ofmap_sram_size = ofmap_sram_size,
-            data_width_bytes = word_size_bytes,
-            sram_write_trace_file = sram_filter_gradient_write_trace_file,
-            dram_write_trace_file = dram_filter_gradient_trace_file
-            )
+        # Filter gradient dram write traces
+        # NOTE: use ofmap sram for gradient write
+        dram.dram_trace_write(
+                ofmap_sram_size = ofmap_sram_size,
+                data_width_bytes = word_size_bytes,
+                sram_write_trace_file = sram_filter_gradient_write_trace_file,
+                dram_write_trace_file = dram_filter_gradient_trace_file
+                )
+
+        bw_numbers, detailed_log = gen_bw_numbers(
+                dram_ifmap_trace_file,
+                dram_filter_trace_file,
+                dram_ofmap_gradient_trace_file,
+                dram_ifmap_gradient_trace_file,
+                dram_filter_gradient_trace_file,
+                sram_read_trace_file,
+                sram_ifmap_gradient_write_trace_file,
+                sram_filter_gradient_write_trace_file
+                )
+    else:
+        bw_numbers = None
+        detailed_log = None
 
     print("Average utilization : \t" + str(util) + " %")
     print("Cycles for compute  : \t" + str(sram_cycles) + " cycles")
-
-    bw_numbers, detailed_log = gen_bw_numbers(
-            dram_ifmap_trace_file,
-            dram_filter_trace_file,
-            dram_ofmap_gradient_trace_file,
-            dram_ifmap_gradient_trace_file,
-            dram_filter_gradient_trace_file,
-            sram_read_trace_file,
-            sram_ifmap_gradient_write_trace_file,
-            sram_filter_gradient_write_trace_file
-            )
 
     return bw_numbers, detailed_log, sram_cycles, util
 
