@@ -122,6 +122,8 @@ def gen_filter_gradient_read_trace(
         ifmap_base = 0, ofmap_gradient_base = 8000000,
         sram_read_trace_file = 'sram_read.csv'
         ):
+
+    # dump traces or not
     if sram_read_trace_file == None:
         dump = False
     else:
@@ -157,6 +159,7 @@ def gen_filter_gradient_read_trace(
 
     # This initialization assumes num_rows << filter_size
     # This assignment logic needs to modified if that is not the case
+    assert dim_rows < filter_size
     for r in range(dim_rows):
         # Calculate base_addr of ifmap for a particular filter element
         base_row_col_id = math.floor(r / num_channels)
@@ -196,6 +199,7 @@ def gen_filter_gradient_read_trace(
         tracefile = open(sram_read_trace_file, 'a')
 
     # Progress bar
+    num_computed_weight_delta = 0
     total = filter_size * num_v_fold
     pbar = tqdm(total = total)
 
@@ -203,7 +207,8 @@ def gen_filter_gradient_read_trace(
     # The condition checks
     #       1)  if the all the input traces for last v fold is generated
     # and   2)  if all the ofmap traces have been generated
-    while ifmap_done == False or ofmap_gradient_done == False:
+    #while ifmap_done == False or ofmap_gradient_done == False:
+    while num_computed_weight_delta != total: # account for the emptying phase of the systolic array
         ifmap_read_trace = ''
         ofmap_gradient_read_trace = ''
         rows_used = 0
@@ -232,6 +237,7 @@ def gen_filter_gradient_read_trace(
                 filter_idx = row_filter_idx[r]
 
                 # Update progress bar
+                num_computed_weight_delta += 1
                 pbar.update(1)
 
                 if filter_idx < filter_size:
@@ -570,6 +576,7 @@ def gen_input_gradient_read_trace(
         tracefile = open(sram_read_trace_file, 'a')
 
     # Progress bar
+    num_computed_ifmap_delta = 0
     total = ifmap_size_per_channel * num_v_fold
     pbar = tqdm(total = total)
 
@@ -623,6 +630,7 @@ def gen_input_gradient_read_trace(
                 ifmap_idx = row_ifmap_idx[r]
 
                 # Update progress bar
+                num_computed_ifmap_delta += 1
                 pbar.update(1)
 
                 if ifmap_idx < ifmap_size_per_channel:
@@ -742,6 +750,7 @@ def gen_input_gradient_read_trace(
         # Cycle update
         local_cycle += 1
 
+    assert num_computed_ifmap_delta == total
     pbar.close()
     if dump:
         tracefile.close()
