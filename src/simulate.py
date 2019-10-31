@@ -4,6 +4,7 @@ import os
 import time
 import sys
 import numpy as np
+import math
 
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
@@ -43,7 +44,7 @@ def main():
     parser.add_argument('--mini-batch-size', default=16, type=int,
                         help='number of mini batch size per hmc accelerator, distributed to all vault npu')
     parser.add_argument('--network', default='SCALE-Sim/topologies/conv_nets/alexnet.csv',
-                        help='neural network architecture topology file, ' 
+                        help='neural network architecture topology file, '
                              'default=SCALE-Sim/topologies/conv_nets/alexnet.csv')
     parser.add_argument('--run-name', default='',
                         help='naming for this experiment run, default is empty')
@@ -133,7 +134,7 @@ def main():
 
     booksim.SetSimTime(int(cycles))
 
-    num_messages = model.size * 4 / 64; # message size assumed 64 bytes for now
+    num_messages = math.ceil(model.size * 4 / 64) # message size assumed 64 bytes for now
 
     iteration = 0
     future_comm = 0
