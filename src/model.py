@@ -40,7 +40,7 @@ class Model:
             self.layers[self.num_layers]['stride'] = int(elems[7])
 
             self.num_layers += 1
-            layer_size = int(elems[3]) * int(elems[4]) * int(elems[6]) * int(elems[7])
+            layer_size = int(elems[3]) * int(elems[4]) * int(elems[5]) * int(elems[6])
             self.size += layer_size
 
         print('Model loading finished\n')
