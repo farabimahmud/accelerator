@@ -33,7 +33,7 @@ BookSim::BookSim(string const & configfile)
 
   _cur_mid = 0;
   _outstanding_messages = 0;
-  _print_messages = false;
+  _print_messages = gWatchOut && (_config->GetInt("watch_all_packets") > 0);
 
 #ifdef LIB_BOOKSIM
   gBookSim = this;
@@ -82,10 +82,10 @@ int BookSim::IssueMessage(int src, int dest, int id,  Message::MessageType type)
 
 int BookSim::PeekMessage(int node, int vnet)
 {
-  int id = -1;
+  int src = -1;
   Message *message = _traffic_manager->Dequeue(node, vnet);
   if (message != nullptr) {
-    id = message->id;
+    src = message->src;
 
     if (_print_messages) {
       *gWatchOut << GetSimTime() << " | node" << node << " | "
@@ -97,7 +97,7 @@ int BookSim::PeekMessage(int node, int vnet)
     _outstanding_messages--;
   }
 
-  return id;
+  return src;
 }
 
 bool BookSim::RunTest()
