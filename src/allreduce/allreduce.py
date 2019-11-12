@@ -35,7 +35,7 @@ class Allreduce(ABC):
             all_gather_schedule[3] = [
                 {1: ([2], 1), 2: ([1], 2), 3: ([1, 2], None)}
             ]
-        MultTree:
+        MultiTree:
             Timestep    Tree 0      Tree 1        Tree 2        Tree 3
                 2         0           1             2             3
                 1          2           3             0             1

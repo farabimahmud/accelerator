@@ -56,13 +56,13 @@ BookSim::~BookSim() {
   delete _traffic_manager;
 }
 
-int BookSim::IssueMessage(int src, int dest, int id,  Message::MessageType type)
+int BookSim::IssueMessage(int flow, int src, int dest, int id,  Message::MessageType type)
 {
   if (id == -1) {
     id = _cur_mid;
   }
 
-  Message *message = Message::New(type, id, src, dest);
+  Message *message = Message::New(type, id, flow, src, dest);
   if (_traffic_manager->Enqueue(message)) {
     _outstanding_messages++;
     _cur_mid++;
@@ -80,11 +80,13 @@ int BookSim::IssueMessage(int src, int dest, int id,  Message::MessageType type)
   return id;
 }
 
-int BookSim::PeekMessage(int node, int vnet)
+pair<int, int> BookSim::PeekMessage(int node, int vnet)
 {
+  int flow = -1;
   int src = -1;
   Message *message = _traffic_manager->Dequeue(node, vnet);
   if (message != nullptr) {
+    flow = message->flow;
     src = message->src;
 
     if (_print_messages) {
@@ -97,7 +99,7 @@ int BookSim::PeekMessage(int node, int vnet)
     _outstanding_messages--;
   }
 
-  return src;
+  return make_pair(flow, src);
 }
 
 bool BookSim::RunTest()
@@ -107,7 +109,7 @@ bool BookSim::RunTest()
   for (int src = 0; src < gNodes; src++) {
     for (int dest = 0; dest < gNodes; dest++) {
       Message::MessageType type = (Message::MessageType) RandomInt(Message::MessageType_NUM - 1);
-      IssueMessage(src, dest, -1, type);
+      IssueMessage(8, src, dest, -1, type);
     }
   }
 

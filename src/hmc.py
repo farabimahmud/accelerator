@@ -160,7 +160,7 @@ class HMC(SimObject):
 
             elif event == 'send-reduce-message':
                 dest = self.allreduce.get_reduce_dest(self.step, self.id)
-                message = Message(self.id, dest, 64)
+                message = Message(6, self.id, dest, 64)
                 self.to_network_message_buffer.enqueue(message, cur_cycle, 1)
                 self.messages_sent += 1
                 #print('{} | {} | Step {}: sends a reduce message to HMC {}'.format(cur_cycle, self.name, self.step, dest))
@@ -173,7 +173,7 @@ class HMC(SimObject):
 
             elif event == 'send-gather-message':
                 dest = self.allreduce.get_broadcast_dest(self.step, self.id)
-                message = Message(self.id, dest, 64)
+                message = Message(6, self.id, dest, 64)
                 self.to_network_message_buffer.enqueue(message, cur_cycle, 1)
                 self.messages_sent += 1
                 if self.messages_sent < self.num_messages:

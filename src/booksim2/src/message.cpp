@@ -7,7 +7,7 @@ ostream& operator<<(ostream &os, const Message &m)
 {
   os << "  Message ID: " << m.id << " (" << &m << ")"
     << " Type: " << Message::MessageTypeToString(m.type) << endl;
-  os << "  Source: " << m.src << "  Dest: " << m.dest
+  os << "  Flow: " << m.flow << " Source: " << m.src << "  Dest: " << m.dest
     << "  vnet: " << m.vnet << endl;
 
   return os;
@@ -18,11 +18,12 @@ Message::Message()
   Reset();
 }
 
-void Message::Set(MessageType type_, int id_, int src_, int dest_)
+void Message::Set(MessageType type_, int id_, int flow_, int src_, int dest_)
 {
   type = type_;
   vnet = GetVirtualNetwork(type);
   id = id_;
+  flow = flow_;
   src = src_;
   dest = dest_;
 }
@@ -32,6 +33,7 @@ void Message::Reset()
   type = MessageType_NUM;
   vnet = -1;
   id = -1;
+  flow = -1;
   src = -1;
   dest = -1;
 }
@@ -51,7 +53,7 @@ Message * Message::New() {
   return m;
 }
 
-Message * Message::New(MessageType type, int id, int src, int dest)
+Message * Message::New(MessageType type, int id, int flow, int src, int dest)
 {
   Message * m;
   if (_free.empty()) {
@@ -61,7 +63,7 @@ Message * Message::New(MessageType type, int id, int src, int dest)
     m = _free.top();
     _free.pop();
   }
-  m->Set(type, id, src, dest);
+  m->Set(type, id, flow, src, dest);
 
   return m;
 }
