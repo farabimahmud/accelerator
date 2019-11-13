@@ -22,6 +22,21 @@ class MXNetTreeAllreduce(Allreduce):
 
 
     '''
+    compute_schedule() - computes spanning trees and schedule for the given network
+    @kary: build kary-trees
+    @alternate: Ture - allocate the links by alternating trees every allocation
+                False - allocating links for one tree as much as possble
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
+    @verbose: print detailed info of tree construction process
+    '''
+    def compute_schedule(self, kary, alternate=True, sort=True, verbose=False):
+        self.compute_best_trees(10, kary, alternate, sort, verbose)
+        self.generate_schedule(verbose)
+    # end of compute_schedule()
+
+
+    '''
     compute_best_trees() - computes binary spanning trees for the given network
     @kary: build kary-trees
     @alternate: Ture - allocate the links by alternating trees every allocation
@@ -1419,18 +1434,18 @@ class MXNetTreeAllreduce(Allreduce):
     '''
     def generate_schedule(self, verbose=False):
         # compute parent-children dependency
-        trees_parent = {}
-        trees_children = {}
+        self.trees_parent = {}
+        self.trees_children = {}
         for root in range(self.network.nodes):
-            trees_parent[root] = {}
-            trees_parent[root][root] = None
-            trees_children[root] = {}
+            self.trees_parent[root] = {}
+            self.trees_parent[root][root] = None
+            self.trees_children[root] = {}
             for node in range(self.network.nodes):
-                trees_children[root][node] = []
+                self.trees_children[root][node] = []
             for child_parent_row in self.conflict_trees[root]:
                 for child, parent in child_parent_row:
-                    trees_parent[root][child] = parent
-                    trees_children[root][parent].append(child)
+                    self.trees_parent[root][child] = parent
+                    self.trees_children[root][parent].append(child)
 
         # initialize the schedules
         self.reduce_scatter_schedule = {}
@@ -1439,7 +1454,7 @@ class MXNetTreeAllreduce(Allreduce):
         trees = deepcopy(self.conflict_trees)
 
         for node in range(self.network.nodes):
-            self.reduce_scatter_schedule[node] = [{}]
+            self.reduce_scatter_schedule[node] = [{node: (None, self.trees_children[node][node])}]
             self.all_gather_schedule[node] = [{}]
 
         change = True
@@ -1451,9 +1466,9 @@ class MXNetTreeAllreduce(Allreduce):
                     child_parent_row = trees[root].pop()
                     for child, parent in child_parent_row:
                         # TODO: It seems dict is ordered by key in python implementation, may optimize later
-                        self.reduce_scatter_schedule[child][0][root] = (parent, trees_children[root][child])
+                        self.reduce_scatter_schedule[child][0][root] = (parent, self.trees_children[root][child])
                         if root not in self.all_gather_schedule[parent][0].keys():
-                            self.all_gather_schedule[parent][0][root] = ([], trees_parent[root][parent])
+                            self.all_gather_schedule[parent][0][root] = ([], self.trees_parent[root][parent])
                         self.all_gather_schedule[parent][0][root][0].append(child)
                         change = True
 

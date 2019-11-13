@@ -17,6 +17,8 @@ public:
     WriteReply     = 3,
     ControlRequest = 4,
     ControlReply   = 5,
+    ReduceData     = 6,
+    GatherData     = 7,
     MessageType_NUM
   };
 

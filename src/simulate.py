@@ -8,11 +8,12 @@ import math
 
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
+sys.path.append('allreduce')
 
 from model import Model
 from hmc import HMC
 from booksim import BookSim
-from collective_comm import *
+from allreduce import construct_allreduce
 from eventq import EventQueue
 from message_buffer import MessageBuffer
 
@@ -54,8 +55,10 @@ def init():
                         help='naming for the output directory, default is empty')
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
-    parser.add_argument('--collective', default='tree',
-                        help='collective communication shedule (tree or ring), default=tree')
+    parser.add_argument('--allreduce', default='multitree',
+                        help='allreduce shedule (multitree or mxnettree or ring), default=multitree')
+    parser.add_argument('--kary', default=2, type=int,
+                        help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--booksim-config', default='', required=True,
                         help='required config file for booksim')
 
@@ -120,12 +123,8 @@ def init():
 
     network = BookSim(args, global_eventq)
 
-    if args.collective == 'tree':
-        cc = TreeCC(args)
-    elif args.collective == 'ring':
-        cc = RingCC(args)
-    else:
-        raise RuntimeError('Unknow collective communication schedule: ' + args.collective)
+    allreduce = construct_allreduce(args)
+    allreduce.compute_schedule(args.kary)
 
     hmcs = []
     from_network_message_buffers = []
@@ -141,7 +140,7 @@ def init():
         to_network_message_buffers[i].set_consumer(network)
         hmcs[i].set_message_buffers(from_network_message_buffers[i],
                 to_network_message_buffers[i])
-        hmcs[i].set_allreduce(cc)
+        hmcs[i].set_allreduce(allreduce)
 
     network.set_message_buffers(to_network_message_buffers,
             from_network_message_buffers)

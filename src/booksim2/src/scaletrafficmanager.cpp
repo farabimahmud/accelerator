@@ -63,6 +63,8 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
     case Message::ReadRequest:
     case Message::WriteRequest:
     case Message::ControlRequest:
+    case Message::ReduceData:
+    case Message::GatherData:
       packet_type = Flit::REQUEST;
       break;
     case Message::ReadReply:

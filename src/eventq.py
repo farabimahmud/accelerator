@@ -38,7 +38,9 @@ class EventQueue:
     return: the next earliest timestamp that has events to be scheduled
     '''
     def next_event_cycle(self):
-        when = min(self.event_queue.keys())
+        when = None
+        if len(self.event_queue) > 0:
+            when = min(self.event_queue.keys())
 
         return when
     # end of next_event_cycle()

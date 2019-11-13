@@ -83,6 +83,10 @@ string Message::MessageTypeToString(const MessageType &type)
       return "ControlRequest";
     case ControlReply:
       return "ControlReply";
+    case ReduceData:
+      return "ReduceData";
+    case GatherData:
+      return "GatherData";
     default:
       cerr << "Error: Unknown Message Type " << type << endl;
       exit(-1);
@@ -95,6 +99,8 @@ int Message::GetVirtualNetwork(const MessageType &type)
     case ReadRequest:
     case WriteRequest:
     case ControlRequest:
+    case ReduceData:
+    case GatherData:
       return 0;
     case ReadReply:
     case WriteReply:
@@ -111,6 +117,8 @@ int Message::GetMessageSize(const MessageType &type)
   switch (type) {
     case ReadReply:
     case WriteRequest:
+    case ReduceData:
+    case GatherData:
       return 64 + 8;
     case ReadRequest:
     case WriteReply:

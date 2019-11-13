@@ -80,14 +80,17 @@ int BookSim::IssueMessage(int flow, int src, int dest, int id,  Message::Message
   return id;
 }
 
-pair<int, int> BookSim::PeekMessage(int node, int vnet)
+tuple<int, int, Message::MessageType> BookSim::PeekMessage(int node, int vnet)
 {
   int flow = -1;
   int src = -1;
+  Message::MessageType type = Message::MessageType_NUM;
+
   Message *message = _traffic_manager->Dequeue(node, vnet);
   if (message != nullptr) {
     flow = message->flow;
     src = message->src;
+    type = message->type;
 
     if (_print_messages) {
       *gWatchOut << GetSimTime() << " | node" << node << " | "
@@ -99,7 +102,7 @@ pair<int, int> BookSim::PeekMessage(int node, int vnet)
     _outstanding_messages--;
   }
 
-  return make_pair(flow, src);
+  return make_tuple(flow, src, type);
 }
 
 bool BookSim::RunTest()

@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 
+
 class Allreduce(ABC):
     def __init__(self, network):
         self.network = network
         self.trees = None
+        self.trees_parent = None
+        self.trees_children = None
         self.timesteps = None
         '''
         schedules are organized as list of list, the list with lower index
@@ -17,7 +20,8 @@ class Allreduce(ABC):
             reduce_scatter_schedule[0] = [
                 {3: (1, [])},
                 {2: (1, [3])},
-                {1: (1, [3])}
+                {1: (1, [3])},
+                {0: (None, [3])}
             ]
             all_gather_schedule[0] = [
                 {0: ([1], None)},
@@ -30,7 +34,7 @@ class Allreduce(ABC):
               0   1       1   3         2   3         3   1
             0  2 1  3   1  0 3  2     2  0 3  1     3  2 1  0
             reduce_scatter_schedule[3] = [
-                {0: (1, []), 1: (1, [2]), 2: (2, [1])}
+                {0: (1, []), 1: (1, [2]), 2: (2, [1]), 3: (None, [2, 1])}
             ]
             all_gather_schedule[3] = [
                 {1: ([2], 1), 2: ([1], 2), 3: ([1, 2], None)}
@@ -43,6 +47,7 @@ class Allreduce(ABC):
             reduce_scatter_schedule[0] = [
                 {1: (1, []), 3: (1, [])},
                 {2: (2, [1])},
+                {0: (None, [1, 2])}
             ]
             all_gather_schedule[0] = [
                 {0: ([2], None)},
@@ -51,6 +56,14 @@ class Allreduce(ABC):
         '''
         self.reduce_scatter_schedule = None
         self.all_gather_schedule = None
+
+
+    '''
+    compute_schedule() - computes spanning trees and schedule for the given network
+    '''
+    def compute_schedule(self, kary, alternate=True, sort=True, verbose=False):
+        self.compute_trees(kary, alternate, sort, verbose)
+        self.generate_schedule(verbose)
 
 
     '''
@@ -135,3 +148,35 @@ class Allreduce(ABC):
         f.write(tree)
         f.close()
     # def generate_trees_dotfile(self, filename)
+
+
+import networks
+from ring_allreduce import RingAllreduce
+from multitree_allreduce import MultiTreeAllreduce
+from mxnettree_allreduce import MXNetTreeAllreduce
+
+import math
+
+
+'''
+construct_allreduce() - construct an allreduce schedule
+@args: arguments of the top simulation
+
+return: an allreduce object
+'''
+def construct_allreduce(args):
+    dimension = int(math.sqrt(args.num_hmcs))
+    assert args.num_hmcs == dimension * dimension
+    network = networks.Torus(args.num_hmcs, dimension)
+    network.build_graph()
+
+    if args.allreduce == 'multitree':
+        allreduce = MultiTreeAllreduce(network)
+    elif args.allreduce == 'mxnettree':
+        allreduce = MXNetTreeAllreduce(network)
+    elif args.allreduce == 'ring':
+        allreduce = RingAllreduce(network)
+    else:
+        raise RuntimeError('Unknow allreduce schedule: ' + args.allreduce)
+
+    return allreduce

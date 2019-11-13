@@ -16,7 +16,7 @@ public:
   ~BookSim();
 
   int IssueMessage(int flow, int src, int dest, int id, Message::MessageType type);
-  pair<int, int> PeekMessage(int node, int vnet);
+  tuple<int, int, Message::MessageType> PeekMessage(int node, int vnet);
 
   bool RunTest();
   inline bool Idle() { return _traffic_manager->Idle() && _outstanding_messages == 0; }
