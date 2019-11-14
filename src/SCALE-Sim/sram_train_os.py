@@ -1,5 +1,8 @@
-import math 
+import math
 from tqdm import tqdm
+import logging
+
+logger = logging.getLogger(__name__)
 
 neg_inf = -1 * math.pow(2,32)
 
@@ -39,7 +42,7 @@ def sram_train(
     num_h_fold_filter_gradient = math.ceil(filter_size / dimension_rows)
     num_v_fold_filter_gradient = math.ceil(ofmap_channels / dimension_cols)
 
-    print(' - compute input-gradient:')
+    logger.info(' - compute input-gradient:')
     input_grad_read_cycles, input_grad_util = gen_input_gradient_read_trace(
             cycle = 0,
             dim_rows = dimension_rows,
@@ -66,9 +69,9 @@ def sram_train(
             sram_write_trace_file = sram_ifmap_gradient_write_trace_file
             )
     input_grad_cycles = max(input_grad_read_cycles, input_grad_write_cycles)
-    print(' -- input-gradient: read cycles: ', input_grad_read_cycles, ', write cycles: ', input_grad_write_cycles)
+    logger.info(' -- input-gradient: read cycles: {}, write cycles: {}'.format(input_grad_read_cycles, input_grad_write_cycles))
 
-    print(' - compute filter-gradient:')
+    logger.info(' - compute filter-gradient:')
     filter_grad_read_cycles, filter_grad_util = gen_filter_gradient_read_trace(
             cycle = input_grad_cycles,
             dim_rows = dimension_rows,
@@ -97,13 +100,13 @@ def sram_train(
     total_cycles = max(filter_grad_read_cycles, filter_grad_write_cycles)
     filter_grad_read_cycles -= input_grad_cycles
     filter_grad_write_cycles -= input_grad_cycles
-    print(' -- filter-gradient: read cycles: ', filter_grad_read_cycles, ', write cycles: ', filter_grad_write_cycles)
+    logger.info(' -- filter-gradient: read cycles: {}, write cycles: {}'.format(filter_grad_read_cycles, filter_grad_write_cycles))
 
     filter_grad_cycles = max(filter_grad_read_cycles, filter_grad_write_cycles)
     cycles = input_grad_cycles + filter_grad_cycles
     assert cycles == total_cycles
-    print(' - input-gradient-cycles: ', input_grad_read_cycles, ', uitl: ', input_grad_util, '%')
-    print(' - filter-gradent-cycles: ', filter_grad_cycles, ', uitl: ', filter_grad_util, '%')
+    logger.info(' - input-gradient-cycles: {}, uitl: {} %'.format(input_grad_read_cycles, input_grad_util))
+    logger.info(' - filter-gradent-cycles: {}, uitl: {} %'.format(filter_grad_cycles, filter_grad_util))
     util = (input_grad_util * input_grad_read_cycles + filter_grad_util * filter_grad_read_cycles) / \
             (input_grad_read_cycles + filter_grad_read_cycles)
 
@@ -159,7 +162,7 @@ def gen_filter_gradient_read_trace(
 
     # This initialization assumes num_rows << filter_size
     # This assignment logic needs to modified if that is not the case
-    assert dim_rows < filter_size
+    assert dim_rows < filter_size # TODO: need to change to fit other cases, a lot
     for r in range(dim_rows):
         # Calculate base_addr of ifmap for a particular filter element
         base_row_col_id = math.floor(r / num_channels)

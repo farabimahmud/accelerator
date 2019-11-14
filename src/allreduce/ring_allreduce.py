@@ -87,6 +87,21 @@ class RingAllreduce(Allreduce):
            verified with generate_schedule in MultiTree
     '''
     def generate_schedule(self, verbose=False):
+        # compute parent-children dependency
+        self.trees_parent = {}
+        self.trees_children = {}
+        for root in range(self.network.nodes):
+            self.trees_parent[root] = {}
+            self.trees_parent[root][root] = None
+            self.trees_children[root] = {}
+            for node in range(self.network.nodes):
+                self.trees_children[root][node] = []
+            for edge in self.trees[root]:
+                child = edge[0]
+                parent = edge[1]
+                self.trees_parent[root][child] = parent
+                self.trees_children[root][parent].append(child)
+
         # initialize the schedules
         self.reduce_scatter_schedule = {}
         self.all_gather_schedule = {}
@@ -114,6 +129,8 @@ class RingAllreduce(Allreduce):
                 # all-gather
                 ag_subflow = self.ring[index - i - 1]
                 self.all_gather_schedule[node].append({ag_subflow: ([child], parent)})
+
+            self.reduce_scatter_schedule[node].append({node: (None, [child])})
 
             if verbose:
                 print('Accelerator {}:'.format(node))

@@ -2,10 +2,12 @@ from collections import defaultdict
 
 
 class Message:
-    def __init__(self, src, dest, size):
+    def __init__(self, flow, src, dest, size, msgtype):
+        self.flow = flow
         self.src = src
         self.dest = dest
         self.size = size
+        self.type = msgtype
 
 
 class MessageBuffer:

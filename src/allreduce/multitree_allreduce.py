@@ -172,19 +172,19 @@ class MultiTreeAllreduce(Allreduce):
     '''
     def generate_schedule(self, verbose=False):
         # compute parent-children dependency
-        trees_parent = {}
-        trees_children = {}
+        self.trees_parent = {}
+        self.trees_children = {}
         for root in range(self.network.nodes):
-            trees_parent[root] = {}
-            trees_parent[root][root] = None
-            trees_children[root] = {}
+            self.trees_parent[root] = {}
+            self.trees_parent[root][root] = None
+            self.trees_children[root] = {}
             for node in range(self.network.nodes):
-                trees_children[root][node] = []
+                self.trees_children[root][node] = []
             for edge in self.trees[root]:
                 child = edge[0]
                 parent = edge[1]
-                trees_parent[root][child] = parent
-                trees_children[root][parent].append(child)
+                self.trees_parent[root][child] = parent
+                self.trees_children[root][parent].append(child)
 
         # initialize the schedules
         reduce_scatter_schedule = {}
@@ -205,7 +205,7 @@ class MultiTreeAllreduce(Allreduce):
                 # send from rs_child to rs_parent for tree root at rs_timestep
                 if rs_timestep not in reduce_scatter_schedule[rs_child].keys():
                     reduce_scatter_schedule[rs_child][rs_timestep] = {}
-                reduce_scatter_schedule[rs_child][rs_timestep][root] = (rs_parent, trees_children[root][rs_child])
+                reduce_scatter_schedule[rs_child][rs_timestep][root] = (rs_parent, self.trees_children[root][rs_child])
 
                 # all-gather
                 ag_child = edge[0]
@@ -216,7 +216,7 @@ class MultiTreeAllreduce(Allreduce):
                 if ag_timestep not in all_gather_schedule[ag_parent].keys():
                     all_gather_schedule[ag_parent][ag_timestep] = {}
                 if root not in all_gather_schedule[ag_parent][ag_timestep].keys():
-                    all_gather_schedule[ag_parent][ag_timestep][root] = ([], trees_parent[root][ag_parent])
+                    all_gather_schedule[ag_parent][ag_timestep][root] = ([], self.trees_parent[root][ag_parent])
                 all_gather_schedule[ag_parent][ag_timestep][root][0].append(ag_child)
 
         # initialize the schedules
@@ -237,6 +237,10 @@ class MultiTreeAllreduce(Allreduce):
                 else:
                     if verbose:
                         print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
+            self.reduce_scatter_schedule[node].append({node: (None, self.trees_children[node][node])})
+            if verbose:
+                print('    root children: {}'.format(self.reduce_scatter_schedule[node][-1]))
+
             if verbose:
                 print('  all-gather schedule:')
             for timestep in range(self.timesteps):
@@ -266,6 +270,7 @@ def test(args):
     allreduce.compute_trees(kary, alternate=True, sort=True)
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree_sort.dot')
+        allreduce.generate_per_tree_dotfile('multitreedot')
     sort_timesteps = allreduce.timesteps
     allreduce.generate_schedule()
     if timesteps > sort_timesteps:

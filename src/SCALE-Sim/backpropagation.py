@@ -1,6 +1,10 @@
 import math
+import logging
+
 import dram_trace as dram
 import sram_train_os as sram
+
+logger = logging.getLogger(__name__)
 
 def backprop(
         array_h = 4,
@@ -127,8 +131,8 @@ def backprop(
         bw_numbers = None
         detailed_log = None
 
-    print("Average utilization : \t" + str(util) + " %")
-    print("Cycles for compute  : \t" + str(sram_cycles) + " cycles")
+    logger.info("Average utilization : {} %".format(util))
+    logger.info("Cycles for compute  : {} cycles\n".format(sram_cycles))
 
     return bw_numbers, detailed_log, sram_cycles, util
 
@@ -206,14 +210,14 @@ def gen_bw_numbers( dram_ifmap_trace_file,
     sram_filter_gradient_bw = num_sram_filter_gradient_write_bytes / delta_clk
 
     unit = ' Bytes/cycle'
-    print('DRAM IFMAP Read BW            : ' + str(dram_ifmap_bw) + unit)
-    print('DRAM Filter Read BW           : ' + str(dram_filter_bw) + unit)
-    print('DRAM OFMAP Gradient Read BW   : ' + str(dram_ofmap_gradient_bw) + unit)
-    print('DRAM IFMAP Gradient Write BW  : ' + str(dram_ifmap_gradient_bw) + unit)
-    print('DRAM Filter Gradient Write BW : ' + str(dram_filter_gradient_bw) + unit)
-    print('SRAM Read BW                  : ' + str(sram_read_bw) + unit)
-    print('SRAM IFMAP Gradient Write BW  : ' + str(sram_ifmap_gradient_bw) + unit)
-    print('SRAM Filter Gradient Write BW : ' + str(sram_filter_gradient_bw) + unit)
+    logger.info('DRAM IFMAP Read BW            : {} {}'.format(dram_ifmap_bw, unit))
+    logger.info('DRAM Filter Read BW           : {} {}'.format(dram_filter_bw, unit))
+    logger.info('DRAM OFMAP Gradient Read BW   : {} {}'.format(dram_ofmap_gradient_bw, unit))
+    logger.info('DRAM IFMAP Gradient Write BW  : {} {}'.format(dram_ifmap_gradient_bw, unit))
+    logger.info('DRAM Filter Gradient Write BW : {} {}'.format(dram_filter_gradient_bw, unit))
+    logger.info('SRAM Read BW                  : {} {}'.format(sram_read_bw, unit))
+    logger.info('SRAM IFMAP Gradient Write BW  : {} {}'.format(sram_ifmap_gradient_bw, unit))
+    logger.info('SRAM Filter Gradient Write BW : {} {}'.format(sram_filter_gradient_bw, unit))
 
     log = str(dram_ifmap_bw) + ',\t' + str(dram_filter_bw) + ',\t' + str(dram_ofmap_gradient_bw) + ',\t' + str(dram_ifmap_gradient_bw) + ',\t' + str(dram_filter_gradient_bw) + ',\t' + str(sram_read_bw) + ',\t' + str(sram_ifmap_gradient_bw) + ',\t' + str(sram_filter_gradient_bw) + ','
 

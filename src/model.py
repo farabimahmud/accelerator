@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 class Model:
     def __init__(self, args):
         self.args = args
@@ -13,7 +17,7 @@ class Model:
 
         first = True
 
-        print('\nModel loading ...')
+        logger.info('\nModel loading ...')
         for row in param_file:
             if first:
                 first = False
@@ -24,8 +28,8 @@ class Model:
             # Do not continue if incomplete line
             if len(elems) < 9:
                 if elems[0]:
-                    print('Warn: incomplete model layer description: line ', self.num_layers + 1)
-                    print(' -- ', row)
+                    logger.warn('Warn: incomplete model layer description: line ', self.num_layers + 1)
+                    logger.warn(' -- ', row)
                 continue
 
 
@@ -43,13 +47,23 @@ class Model:
             layer_size = int(elems[3]) * int(elems[4]) * int(elems[5]) * int(elems[6])
             self.size += layer_size
 
-        print('Model loading finished\n')
-        #for l in range(self.num_layers):
-        #    print('layer ', l, ': {name: ', self.layers[l]['name'],
-        #            ', ifmap_h: ', self.layers[l]['ifmap_h'], ', ifmap_w: ', self.layers[l]['ifmap_w'],
-        #            ', filter_h: ', self.layers[l]['filter_h'], ', filter_w', self.layers[l]['filter_w'],
-        #            ', num_channels: ', self.layers[l]['num_channels'],
-        #            ', num_filters: ', self.layers[l]['num_filters'],
-        #            ', stride: ', self.layers[l]['stride'], '}')
+        logger.info('Model loading finished\n')
+        for l in range(self.num_layers):
+            logger.debug('layer: {}: [name: {}, ifmap_h: {}, ifmap_w: {},'
+                         'filter_h: {}, filter_w: {}, num_channels: {},'
+                         'num_filters: {}, stride: {}]'.format(l,
+                             self.layers[l]['name'], self.layers[l]['ifmap_h'],
+                             self.layers[l]['ifmap_w'],
+                             self.layers[l]['filter_h'],
+                             self.layers[l]['filter_w'],
+                             self.layers[l]['num_channels'],
+                             self.layers[l]['num_filters'],
+                             self.layers[l]['stride']))
+            #logger.debug('layer ', l, ': {name: ', self.layers[l]['name'],
+            #        ', ifmap_h: ', self.layers[l]['ifmap_h'], ', ifmap_w: ', self.layers[l]['ifmap_w'],
+            #        ', filter_h: ', self.layers[l]['filter_h'], ', filter_w', self.layers[l]['filter_w'],
+            #        ', num_channels: ', self.layers[l]['num_channels'],
+            #        ', num_filters: ', self.layers[l]['num_filters'],
+            #        ', stride: ', self.layers[l]['stride'], '}')
 
     # parse_model() end

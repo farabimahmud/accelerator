@@ -5,17 +5,20 @@ import time
 import sys
 import numpy as np
 import math
+import logging
 
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
+sys.path.append('allreduce')
 
 from model import Model
 from hmc import HMC
 from booksim import BookSim
-from collective_comm import *
+from allreduce import construct_allreduce
 from eventq import EventQueue
 from message_buffer import MessageBuffer
 
+logger = logging.getLogger(__name__)
 
 def cleanup(args):
     cmd = 'mkdir ' + args.outdir + '/layer_wise'
@@ -50,16 +53,27 @@ def init():
                              'default=SCALE-Sim/topologies/conv_nets/alexnet.csv')
     parser.add_argument('--run-name', default='',
                         help='naming for this experiment run, default is empty')
-    parser.add_argument('--outdir', default='',
+    parser.add_argument('-d', '--outdir', default='',
                         help='naming for the output directory, default is empty')
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
-    parser.add_argument('--collective', default='tree',
-                        help='collective communication shedule (tree or ring), default=tree')
+    parser.add_argument('--allreduce', default='multitree',
+                        help='allreduce shedule (multitree or mxnettree or ring), default=multitree')
+    parser.add_argument('-k', '--kary', default=2, type=int,
+                        help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--booksim-config', default='', required=True,
                         help='required config file for booksim')
+    parser.add_argument('-l', '--enable-logger', default=[], action='append',
+                        help='Enable logging for a specific module, append module name')
+    parser.add_argument('-v', '--verbose', default=False, action='store_true',
+                        help='Set the log level to debug, printing out detailed messages during execution.')
 
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+    else:
+        logging.basicConfig(format='%(message)s', level=logging.INFO)
 
     config = cp.ConfigParser()
     config.read(args.arch_config)
@@ -102,30 +116,26 @@ def init():
         os.system('mv ' + args.outdir + ' ' + old_path)
     os.system('mkdir ' + args.outdir)
 
-    print("====================================================")
-    print("******************* SCALE SIM **********************")
-    print("====================================================")
-    print("Array Size: \t", args.pe_array_height, "x", args.pe_array_width)
-    print("SRAM IFMAP: \t", args.ifmap_sram_size)
-    print("SRAM Filter: \t", args.filter_sram_size)
-    print("SRAM OFMAP: \t", args.ofmap_sram_size)
-    print("CSV file path: \t" + args.network)
-    print("Dataflow: \t", args.data_flow)
-    print("====================================================")
+    logger.info("====================================================")
+    logger.info("******************* SCALE SIM **********************")
+    logger.info("====================================================")
+    logger.info("Array Size:    {} x {}".format(args.pe_array_height, args.pe_array_width))
+    logger.info("SRAM IFMAP:    {}".format(args.ifmap_sram_size))
+    logger.info("SRAM Filter:   {}".format(args.filter_sram_size))
+    logger.info("SRAM OFMAP:    {}".format(args.ofmap_sram_size))
+    logger.info("CSV file path: {}".format(args.network))
+    logger.info("Dataflow:      {}".format(args.data_flow))
+    logger.info("====================================================\n")
 
     global_eventq = EventQueue()
 
     model = Model(args)
-    print('NN model size: {} hyperparameters'.format(model.size))
+    logger.info('NN model size: {} hyperparameters\n'.format(model.size))
 
     network = BookSim(args, global_eventq)
 
-    if args.collective == 'tree':
-        cc = TreeCC(args)
-    elif args.collective == 'ring':
-        cc = RingCC(args)
-    else:
-        raise RuntimeError('Unknow collective communication schedule: ' + args.collective)
+    allreduce = construct_allreduce(args)
+    allreduce.compute_schedule(args.kary)
 
     hmcs = []
     from_network_message_buffers = []
@@ -141,7 +151,7 @@ def init():
         to_network_message_buffers[i].set_consumer(network)
         hmcs[i].set_message_buffers(from_network_message_buffers[i],
                 to_network_message_buffers[i])
-        hmcs[i].set_allreduce(cc)
+        hmcs[i].set_allreduce(allreduce)
 
     network.set_message_buffers(to_network_message_buffers,
             from_network_message_buffers)
@@ -165,15 +175,25 @@ def main():
     do_sim_loop(global_eventq)
 
     compute_cycles = hmcs[0].compute_cycles
+    allreduce_compute_cycles = 0
+    for hmc in hmcs:
+        if allreduce_compute_cycles < hmc.allreduce_compute_cycles:
+            allreduce_compute_cycles = hmc.allreduce_compute_cycles
     cycles = global_eventq.cycles
-    communication_cycles = cycles - compute_cycles
+    allreduce_cycles = cycles - compute_cycles
+    pure_communication_cycles = allreduce_cycles - allreduce_compute_cycles
 
     compute_percentile = compute_cycles / cycles * 100
-    communication_percentile = communication_cycles / cycles * 100
+    allreduce_percentile = allreduce_cycles / cycles * 100
+    allreduce_compute_percentile = allreduce_compute_cycles / cycles * 100
+    pure_communication_percentile = allreduce_percentile - allreduce_compute_percentile
 
-    print('\nTraining epoch runtime: {} cycles'.format(cycles))
-    print(' - computation: {} cycles ({:.2f}%)'.format(compute_cycles, compute_percentile))
-    print(' - communication: {} cycles ({:.2f}%)\n'.format(communication_cycles, communication_percentile))
+    logger.info('\n======== Simulation Summary ========')
+    logger.info('Training epoch runtime: {} cycles'.format(cycles))
+    logger.info(' - computation: {} cycles ({:.2f}%)'.format(compute_cycles, compute_percentile))
+    logger.info(' - allreduce: {} cycles ({:.2f}%)'.format(allreduce_cycles, allreduce_percentile))
+    logger.info('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
+    logger.info('     - pure communication: {} cycles ({:.2f}%)\n'.format(pure_communication_cycles, pure_communication_percentile))
 
     cleanup(args)
 
