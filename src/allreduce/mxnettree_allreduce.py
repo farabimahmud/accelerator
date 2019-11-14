@@ -107,7 +107,6 @@ class MXNetTreeAllreduce(Allreduce):
             if not self.silent:
                 filename = 'conflict_trees.dot'
 
-        filename = 'conflict_trees.dot'
         self.generate_conflict_trees(filename)
         self.mxnet_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
         #self.topdown_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)

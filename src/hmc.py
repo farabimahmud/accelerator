@@ -53,7 +53,7 @@ class HMC(SimObject):
         self.step = 0
         # the local accelerator can only control what to send but not what to receive
         self.messages_sent = 0
-        self.messages_received = {'reduce-scatter': [{}] * self.args.num_hmcs,
+        self.messages_received = {'reduce-scatter': [{} for i in range(self.args.num_hmcs)],
                                   'all-gather': [0] * self.args.num_hmcs}
 
 
@@ -221,8 +221,6 @@ class HMC(SimObject):
                     self.schedule('send-reduce-message', cur_cycle + 1)
                     #print('{} | {} | start reducing for flow {} to parent HMC {}'.format(cur_cycle, self.name, send_flow, parent))
                 else:
-                    #if len(self.reduce_scatter_schedule) != 0:
-                    #    print('{} | {}'.format(self.name, self.reduce_scatter_schedule))
                     if len(self.reduce_scatter_schedule) == 0:
                         self.communication_state = 'all-gather'
                         self.schedule('all-gather', cur_cycle + 1)
@@ -296,8 +294,8 @@ class HMC(SimObject):
             self.from_network_message_buffer.dequeue(cur_cycle)
             assert message != None
             if message.type == pybooksim.Message.ReduceData:
-                self.messages_received['reduce-scatter'][message.flow][message.src] += 1
                 #print('{} | {} | receives a reduce messsage for flow {} from child HMC {}'.format(cur_cycle, self.name, message.flow, message.src))
+                self.messages_received['reduce-scatter'][message.flow][message.src] += 1
                 if self.messages_received['reduce-scatter'][message.flow][message.src] == self.num_messages:
                     self.messages_received['reduce-scatter'][message.flow][message.src] = 0
                     if self.computation_state == 'idle':

@@ -164,15 +164,25 @@ def main():
     do_sim_loop(global_eventq)
 
     compute_cycles = hmcs[0].compute_cycles
+    allreduce_compute_cycles = 0
+    for hmc in hmcs:
+        if allreduce_compute_cycles < hmc.allreduce_compute_cycles:
+            allreduce_compute_cycles = hmc.allreduce_compute_cycles
     cycles = global_eventq.cycles
-    communication_cycles = cycles - compute_cycles
+    allreduce_cycles = cycles - compute_cycles
+    pure_communication_cycles = allreduce_cycles - allreduce_compute_cycles
 
     compute_percentile = compute_cycles / cycles * 100
-    communication_percentile = communication_cycles / cycles * 100
+    allreduce_percentile = allreduce_cycles / cycles * 100
+    allreduce_compute_percentile = allreduce_compute_cycles / cycles * 100
+    pure_communication_percentile = allreduce_percentile - allreduce_compute_percentile
 
-    print('\nTraining epoch runtime: {} cycles'.format(cycles))
+    print('\n======== Simulation Summary ========')
+    print('Training epoch runtime: {} cycles'.format(cycles))
     print(' - computation: {} cycles ({:.2f}%)'.format(compute_cycles, compute_percentile))
-    print(' - communication: {} cycles ({:.2f}%)\n'.format(communication_cycles, communication_percentile))
+    print(' - allreduce: {} cycles ({:.2f}%)'.format(allreduce_cycles, allreduce_percentile))
+    print('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
+    print('     - pure communication: {} cycles ({:.2f}%)\n'.format(pure_communication_cycles, pure_communication_percentile))
 
     cleanup(args)
 
