@@ -1,7 +1,10 @@
 import math
+import logging
 
 import trace_gen_wrapper as tg
 import backpropagation as bp
+
+logger = logging.getLogger(__name__)
 
 class NPU:
     def __init__(self, args):
@@ -37,7 +40,7 @@ class NPU:
 
             bw_head_str = str(self.args.ifmap_sram_size) + ',\t' + str(self.args.filter_sram_size) + ',\t' + str(self.args.ofmap_sram_size) + ',\t'
 
-        print("\nFeed-Forward ...")
+        logger.info("\nFeed-Forward ...")
 
         if training:
             word_size_bytes = 4
@@ -49,7 +52,7 @@ class NPU:
 
         for l in range(model.num_layers):
             name = model.layers[l]['name']
-            print('\nCommencing run for ' + name)
+            logger.info('\nCommencing run for ' + name)
 
             ifmap_h = model.layers[l]['ifmap_h']
             ifmap_w = model.layers[l]['ifmap_w']
@@ -155,14 +158,14 @@ class NPU:
 
             bw_head_str = str(self.args.ifmap_sram_size) + ',\t' + str(self.args.filter_sram_size) + ',\t' + str(self.args.ofmap_sram_size) + ',\t'
 
-        print('\nBackward Propagation ...')
+        logger.info('\nBackward Propagation ...')
 
         total_cycles = 0
         total_util   = 0
 
         for l in reversed(range(model.num_layers)):
             name = model.layers[l]['name']
-            print('\nCommencing back-propagation run for ' + name)
+            logger.info('\nCommencing back-propagation run for ' + name)
 
             ifmap_h = model.layers[l]['ifmap_h']
             ifmap_w = model.layers[l]['ifmap_w']
@@ -260,7 +263,7 @@ class NPU:
     # end of backprop()
 
     def train(self, model):
-        print('Start a training epoch ...')
+        logger.info('Start a training epoch ...')
 
         total_cycles = 0
 

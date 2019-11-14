@@ -1,6 +1,7 @@
 import sys
 import math
 from copy import deepcopy
+import logging
 
 sys.path.append('booksim2/src')
 
@@ -10,6 +11,7 @@ from npu import NPU
 from eventq import EventQueue
 from message_buffer import *
 
+logger = logging.getLogger(__name__)
 
 class HMC(SimObject):
     # like static variables, reducing simulation time for data-parallel training
@@ -144,7 +146,7 @@ class HMC(SimObject):
             assert self.computation_state == 'training'
             self.computation_state = 'idle'
             self.schedule('aggregation', cur_cycle + 1)
-            #print('{} | {} finishes training, computation sate: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
+            logger.info('{} | {} finishes training, computation sate: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
             events.remove('finish-training')
 
         if 'training' in events:
@@ -152,7 +154,7 @@ class HMC(SimObject):
                 self.computation_state = 'training'
                 cycles = self.train()
                 self.schedule('finish-training', cur_cycle + cycles)
-                #print('{} | {} | starts training, computation state: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
+                logger.info('{} | {} | starts training, computation state: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
             else:
                 self.reschedule(event)
             events.remove('training')
@@ -170,7 +172,7 @@ class HMC(SimObject):
             if len(self.pending_aggregations) > 0:
                 # clear dependency
                 flow, child = self.pending_aggregations.pop(0)
-                #print('{} | {} | clear pending aggregation for flow {} from child HMC {}'.format(cur_cycle, self.name, flow, child))
+                logger.debug('{} | {} | clear pending aggregation for flow {} from child HMC {}'.format(cur_cycle, self.name, flow, child))
                 level = None
                 if len(self.reduce_scatter_schedule) > 0:
                     for i, schedules in enumerate(self.reduce_scatter_schedule):
@@ -182,7 +184,7 @@ class HMC(SimObject):
                     if self.sending == None:
                         self.schedule('reduce-scatter', cur_cycle + 1)
 
-            #print('{} | {} | finishes aggregation , computation state: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
+            logger.info('{} | {} | finishes aggregation , computation state: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
 
             if len(self.pending_aggregations) > 0:
                 self.schedule('aggregation', cur_cycle + 1)
@@ -194,7 +196,7 @@ class HMC(SimObject):
                 self.computation_state = 'aggregating'
                 cycles = self.aggregate()
                 self.schedule('finish-aggregation', cur_cycle + cycles)
-                #print('{} | {} | starts aggregation, computation state: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
+                logger.info('{} | {} | starts aggregation, computation state: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
             else:
                 self.reschedule(event)
             events.remove('aggregation')
@@ -219,12 +221,12 @@ class HMC(SimObject):
                 if parent != None:
                     self.sending = (send_flow, parent)
                     self.schedule('send-reduce-message', cur_cycle + 1)
-                    #print('{} | {} | start reducing for flow {} to parent HMC {}'.format(cur_cycle, self.name, send_flow, parent))
+                    logger.info('{} | {} | start reducing for flow {} to parent HMC {}'.format(cur_cycle, self.name, send_flow, parent))
                 else:
                     if len(self.reduce_scatter_schedule) == 0:
                         self.communication_state = 'all-gather'
                         self.schedule('all-gather', cur_cycle + 1)
-                        #print('{} | {} | schedule all-gather'.format(cur_cycle, self.name))
+                        logger.debug('{} | {} | schedule all-gather'.format(cur_cycle, self.name))
             events.remove('reduce-scatter')
 
         if 'send-reduce-message' in events:
@@ -237,6 +239,7 @@ class HMC(SimObject):
             if self.messages_sent < self.num_messages:
                 self.schedule('send-reduce-message', cur_cycle + 1)
             else:
+                logger.info('{} | {} | finishes reducing for flow {} to parent HMC {}'.format(cur_cycle, self.name, flow, dest))
                 self.messages_sent = 0
                 self.sending = None
                 if len(self.reduce_scatter_schedule) > 0:
@@ -244,12 +247,8 @@ class HMC(SimObject):
             events.remove('send-reduce-message')
 
         if 'all-gather' in events:
-            if self.communication_state != 'all-gather':
-                print(self.communication_state)
             assert self.communication_state == 'all-gather'
             assert self.messages_sent == 0
-            if self.sending != None:
-                print('sending {}'.format(self.sending))
             assert self.sending == None
             assert self.all_gather_schedule
             send_flow = None
@@ -266,7 +265,7 @@ class HMC(SimObject):
                     self.all_gather_schedule.pop(0)
                 self.sending = (send_flow, child)
                 self.schedule('send-gather-message', cur_cycle + 1)
-                #print('{} | {} | start gathering for flow {} to child HMC {}'.format(cur_cycle, self.name, send_flow, child))
+                logger.info('{} | {} | start gathering for flow {} to child HMC {}'.format(cur_cycle, self.name, send_flow, child))
             events.remove('all-gather')
 
         if 'send-gather-message' in events:
@@ -286,7 +285,7 @@ class HMC(SimObject):
                     self.schedule('all-gather', cur_cycle + 1)
                 else:
                     self.communication_state = 'idle'
-                    #print('{} | {} finishes all-gather'.format(cur_cycle, self.name))
+                    logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
             events.remove('send-gather-message')
 
         if 'incoming-message' in events:
@@ -317,7 +316,7 @@ class HMC(SimObject):
                             self.schedule('all-gather', cur_cycle + 1)
                     else:
                         self.state = 'idle'
-                        #print('{} | {} finishes all-gather'.format(cur_cycle, self.name))
+                        logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
             events.remove('incoming-message')
 
         if len(events) != 0:
