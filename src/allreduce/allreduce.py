@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 
 
@@ -147,6 +148,79 @@ class Allreduce(ABC):
         f = open(filename, 'w')
         f.write(tree)
         f.close()
+    # def generate_trees_dotfile(self, filename)
+
+
+    '''
+    generate_per_tree_dotfile() - generate dotfile for each computed tree
+    @filename: name of dotfile
+    '''
+    def generate_per_tree_dotfile(self, filename):
+        cmd = 'mkdir ' + filename
+        os.system(cmd)
+
+        # color palette for ploting nodes of different tree levels
+        colors = ['#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7', '#df65b0',
+                '#e7298a', '#ce1256', '#980043', '#67001f']
+
+        header = 'digraph tree {\n'
+        header += '  rankdir = BT;\n'
+        header += '  subgraph {\n'
+
+        # group nodes with same rank (same tree level/iteration)
+        # and set up the map for node name and its rank in node_rank
+        ranks = {}
+        node_rank = {}
+        trees = {}
+        for root in range(self.network.nodes):
+            ranks[root] = {}
+            node_rank[root] = {}
+            for rank in range(self.timesteps + 1):
+                ranks[root][rank] = []
+
+        for root in range(self.network.nodes):
+            minrank = self.timesteps
+            for edge in self.trees[root]:
+                child = '"{}-{}"'.format(root, edge[0])
+                rank = edge[2] + 1
+                ranks[root][rank].append(child)
+                node_rank[root][child] = rank
+                if edge[1] == root and rank - 1 < minrank:
+                    minrank = rank - 1
+            ranks[root][minrank].append('"{}-{}"'.format(root, root))
+            node_rank[root]['"{}-{}"'.format(root, root)] = minrank
+
+        for root in range(self.network.nodes):
+            trees[root] = header + '    /* tree {} */\n'.format(root)
+            for edge in self.trees[root]:
+                child = '"{}-{}"'.format(root, edge[0])
+                parent = '"{}-{}"'.format(root, edge[1])
+                cycle = self.timesteps - edge[2]
+                minlen = node_rank[root][child] - node_rank[root][parent] # for strict separation of ranks
+                trees[root] += ''.join('    {} -> {} [ label="{}" minlen={} ];\n'.format(child, parent, cycle, minlen))
+
+        for root in range(self.network.nodes):
+            trees[root] += '    // note that rank is used in the subgraph\n'
+            for rank in range(self.timesteps + 1):
+                if ranks[root][rank]:
+                    level = '    {rank = same;'
+                    for node in ranks[root][rank]:
+                        level += ' {};'.format(node)
+                    level += '}\n'
+                    trees[root] += level
+
+            trees[root] += '    // node colors\n'
+            style = '    {} [style="filled", fillcolor="{}"];\n'
+            for rank in range(self.timesteps + 1):
+                if ranks[root][rank]:
+                    trees[root] += ''.join(style.format(node, colors[rank % len(colors)]) for node in ranks[root][rank])
+
+            trees[root] += '  } /* closing subgraph */\n'
+            trees[root] += '}\n'
+
+            f = open('{}/tree-{}.dot'.format(filename, root), 'w')
+            f.write(trees[root])
+            f.close()
     # def generate_trees_dotfile(self, filename)
 
 
