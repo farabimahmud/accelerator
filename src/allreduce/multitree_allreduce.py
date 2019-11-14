@@ -61,7 +61,6 @@ class MultiTreeAllreduce(Allreduce):
                 turns = 0
                 while changed:
                     changed = False
-                    old_from_nodes = deepcopy(from_nodes)
 
                     root = sorted_roots[turns % self.network.nodes]
 
@@ -149,6 +148,16 @@ class MultiTreeAllreduce(Allreduce):
                         print('  tree {}: {}'.format(root, self.trees[root]))
 
             self.timesteps += 1
+
+        # verify that there is no link conflicts
+        for root in range(self.network.nodes):
+            for i in range(root + 1, self.network.nodes):
+                intersection = set(self.trees[root]) & set(self.trees[i])
+                if len(intersection) != 0:
+                    print('tree {} and tree {} have link conflicts {}'.format(root, i, intersection))
+                    print('tree {}: {}'.format(root, self.trees[root]))
+                    print('tree {}: {}'.format(i, self.trees[i]))
+                    exit()
 
         if verbose:
             print('Total timesteps for network size of {}: {}'.format(self.network.nodes, self.timesteps))
