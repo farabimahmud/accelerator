@@ -107,14 +107,15 @@ def init():
     args.data_flow = config.get(arch_sec, 'Dataflow')
 
     # Create output directory
-    if not os.path.exists("./outputs/"):
-        os.system("mkdir ./outputs")
+    if args.dump:
+        if not os.path.exists("./outputs/"):
+            os.system("mkdir ./outputs")
 
-    if os.path.exists(args.outdir):
-        t = time.time()
-        old_path = args.outdir + '_' + str(t)
-        os.system('mv ' + args.outdir + ' ' + old_path)
-    os.system('mkdir ' + args.outdir)
+        if os.path.exists(args.outdir):
+            t = time.time()
+            old_path = args.outdir + '_' + str(t)
+            os.system('mv ' + args.outdir + ' ' + old_path)
+        os.system('mkdir ' + args.outdir)
 
     logger.info("====================================================")
     logger.info("******************* SCALE SIM **********************")
@@ -195,7 +196,8 @@ def main():
     logger.info('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
     logger.info('     - pure communication: {} cycles ({:.2f}%)\n'.format(pure_communication_cycles, pure_communication_percentile))
 
-    cleanup(args)
+    if args.dump:
+        cleanup(args)
 
 
 if __name__ == '__main__':

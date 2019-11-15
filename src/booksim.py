@@ -52,7 +52,7 @@ class BookSim(SimObject):
                 assert message.src == i
                 self.booksim.IssueMessage(message.flow, i, message.dest, -1, message.type)
                 self.in_message_buffers[i].dequeue(cur_cycle)
-                #print('{} | {} | issues a {} message for flow {} from HMC {} to HMC {}'.format(cur_cycle, self.name, message.type, message.flow, i, message.dest))
+                #print('{} | {} | issues a {} message for flow {} from HMC-{} to HMC-{}'.format(cur_cycle, self.name, message.type, message.flow, i, message.dest))
 
         self.booksim.SetSimTime(cur_cycle)
         self.booksim.WakeUp()
@@ -64,7 +64,7 @@ class BookSim(SimObject):
                 assert flow != -1
                 message = Message(flow, src, i, 64, msgtype)
                 self.out_message_buffers[i].enqueue(message, cur_cycle, 1)
-                #print('{} | {} | peek a {} message for flow {} to HMC {} from HMC {}'.format(cur_cycle, self.name, msgtype, flow, i, src))
+                #print('{} | {} | peek a {} message for flow {} to HMC-{} from HMC-{}'.format(cur_cycle, self.name, msgtype, flow, i, src))
 
         if not self.booksim.Idle():
             self.schedule(self, cur_cycle + 1)
