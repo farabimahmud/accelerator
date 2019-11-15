@@ -12,7 +12,7 @@ class Torus:
         self.adjacency_matrix = np.zeros((nodes, nodes))
 
 
-    def build_graph(self, graphfile=None):
+    def build_graph(self, filename=None):
 
         link_weight = 2
 
@@ -25,11 +25,12 @@ class Torus:
             #print('node {}: row {} col {}'.format(node, row, col))
 
             if row == 0:
-                north = node + self.dimension * (self.dimension - 1)
-                self.from_nodes[node].append(north)
-                self.to_nodes[node].append(north)
-                self.adjacency_matrix[node][north] = link_weight
-                self.adjacency_matrix[north][node] = link_weight
+                if self.dimension > 2:
+                    north = node + self.dimension * (self.dimension - 1)
+                    self.from_nodes[node].append(north)
+                    self.to_nodes[node].append(north)
+                    self.adjacency_matrix[node][north] = link_weight
+                    self.adjacency_matrix[north][node] = link_weight
             else:
                 north = node - self.dimension
                 self.from_nodes[node].append(north)
@@ -38,20 +39,22 @@ class Torus:
                 self.adjacency_matrix[north][node] = link_weight
 
             if row == self.dimension - 1:
-                south = node - self.dimension * (self.dimension - 1)
-                self.from_nodes[node].append(south)
-                self.to_nodes[node].append(south)
+                if self.dimension > 2:
+                    south = node - self.dimension * (self.dimension - 1)
+                    self.from_nodes[node].append(south)
+                    self.to_nodes[node].append(south)
             else:
                 south = node + self.dimension
                 self.from_nodes[node].append(south)
                 self.to_nodes[node].append(south)
 
             if col == 0:
-                west = node + self.dimension - 1
-                self.from_nodes[node].append(west)
-                self.to_nodes[node].append(west)
-                self.adjacency_matrix[node][west] = link_weight
-                self.adjacency_matrix[west][node] = link_weight
+                if self.dimension > 2:
+                    west = node + self.dimension - 1
+                    self.from_nodes[node].append(west)
+                    self.to_nodes[node].append(west)
+                    self.adjacency_matrix[node][west] = link_weight
+                    self.adjacency_matrix[west][node] = link_weight
             else:
                 west = node - 1
                 self.from_nodes[node].append(west)
@@ -60,9 +63,10 @@ class Torus:
                 self.adjacency_matrix[west][node] = link_weight
 
             if col == self.dimension - 1:
-                east = node - self.dimension + 1
-                self.from_nodes[node].append(east)
-                self.to_nodes[node].append(east)
+                if self.dimension > 2:
+                    east = node - self.dimension + 1
+                    self.from_nodes[node].append(east)
+                    self.to_nodes[node].append(east)
             else:
                 east = node + 1
                 self.from_nodes[node].append(east)
@@ -72,7 +76,7 @@ class Torus:
         #for node in range(self.nodes):
         #    print(' -- {}: {}'.format(node, self.from_nodes[node]))
 
-        if graphfile:
+        if filename:
             for node in range(self.nodes):
                 for i, n in enumerate(self.from_nodes[node]):
                     assert(not (node, n) in self.edges)
@@ -92,10 +96,10 @@ class Torus:
             graph += '  } /* closing subgraph */\n'
             graph += '}\n'
 
-            f = open('torus_graph.dot', 'w')
+            f = open(filename, 'w')
             f.write(graph)
             f.close()
-    # def build_graph(self, graphfile=None)
+    # def build_graph(self, filename=None)
 
 
 def test():
