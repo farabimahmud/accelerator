@@ -4,15 +4,21 @@ import os
 import time
 import sys
 import numpy as np
+import math
+import logging
 
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
+sys.path.append('allreduce')
 
-from collective_comm import *
 from model import Model
 from hmc import HMC
-import pybooksim
+from booksim import BookSim
+from allreduce import construct_allreduce
+from eventq import EventQueue
+from message_buffer import MessageBuffer
 
+logger = logging.getLogger(__name__)
 
 def cleanup(args):
     cmd = 'mkdir ' + args.outdir + '/layer_wise'
@@ -29,7 +35,7 @@ def cleanup(args):
         os.system(cmd)
 
 
-def main():
+def init():
 
     parser = argparse.ArgumentParser()
 
@@ -43,20 +49,31 @@ def main():
     parser.add_argument('--mini-batch-size', default=16, type=int,
                         help='number of mini batch size per hmc accelerator, distributed to all vault npu')
     parser.add_argument('--network', default='SCALE-Sim/topologies/conv_nets/alexnet.csv',
-                        help='neural network architecture topology file, ' 
+                        help='neural network architecture topology file, '
                              'default=SCALE-Sim/topologies/conv_nets/alexnet.csv')
     parser.add_argument('--run-name', default='',
                         help='naming for this experiment run, default is empty')
-    parser.add_argument('--outdir', default='',
+    parser.add_argument('-d', '--outdir', default='',
                         help='naming for the output directory, default is empty')
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
-    parser.add_argument('--collective', default='tree',
-                        help='collective communication shedule (tree or ring), default=tree')
+    parser.add_argument('--allreduce', default='multitree',
+                        help='allreduce shedule (multitree or mxnettree or ring), default=multitree')
+    parser.add_argument('-k', '--kary', default=2, type=int,
+                        help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--booksim-config', default='', required=True,
                         help='required config file for booksim')
+    parser.add_argument('-l', '--enable-logger', default=[], action='append',
+                        help='Enable logging for a specific module, append module name')
+    parser.add_argument('-v', '--verbose', default=False, action='store_true',
+                        help='Set the log level to debug, printing out detailed messages during execution.')
 
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+    else:
+        logging.basicConfig(format='%(message)s', level=logging.INFO)
 
     config = cp.ConfigParser()
     config.read(args.arch_config)
@@ -76,9 +93,9 @@ def main():
     args.pe_array_height= int(config.get(arch_sec, 'ArrayHeight'))
     args.pe_array_width = int(config.get(arch_sec, 'ArrayWidth'))
 
-    args.ifmap_sram_size  = int(config.get(arch_sec, 'IfmapSramSz')) *1024
-    args.filter_sram_size = int(config.get(arch_sec, 'FilterSramSz')) *1024
-    args.ofmap_sram_size  = int(config.get(arch_sec, 'OfmapSramSz')) *1024
+    args.ifmap_sram_size  = int(config.get(arch_sec, 'IfmapSramSz')) << 10 #* 1024
+    args.filter_sram_size = int(config.get(arch_sec, 'FilterSramSz')) << 10 #* 1024
+    args.ofmap_sram_size  = int(config.get(arch_sec, 'OfmapSramSz')) << 10 #* 1024
 
     args.ifmap_offset  = int(config.get(arch_sec, 'IfmapOffset'))
     args.filter_offset = int(config.get(arch_sec, 'FilterOffset'))
@@ -90,158 +107,98 @@ def main():
     args.data_flow = config.get(arch_sec, 'Dataflow')
 
     # Create output directory
-    if not os.path.exists("./outputs/"):
-        os.system("mkdir ./outputs")
+    if args.dump:
+        if not os.path.exists("./outputs/"):
+            os.system("mkdir ./outputs")
 
-    if os.path.exists(args.outdir):
-        t = time.time()
-        old_path = args.outdir + '_' + str(t)
-        os.system('mv ' + args.outdir + ' ' + old_path)
-    os.system('mkdir ' + args.outdir)
+        if os.path.exists(args.outdir):
+            t = time.time()
+            old_path = args.outdir + '_' + str(t)
+            os.system('mv ' + args.outdir + ' ' + old_path)
+        os.system('mkdir ' + args.outdir)
 
-    print("====================================================")
-    print("******************* SCALE SIM **********************")
-    print("====================================================")
-    print("Array Size: \t", args.pe_array_height, "x", args.pe_array_width)
-    print("SRAM IFMAP: \t", args.ifmap_sram_size)
-    print("SRAM Filter: \t", args.filter_sram_size)
-    print("SRAM OFMAP: \t", args.ofmap_sram_size)
-    print("CSV file path: \t" + args.network)
-    print("Dataflow: \t", args.data_flow)
-    print("====================================================")
+    logger.info("====================================================")
+    logger.info("******************* SCALE SIM **********************")
+    logger.info("====================================================")
+    logger.info("Array Size:    {} x {}".format(args.pe_array_height, args.pe_array_width))
+    logger.info("SRAM IFMAP:    {}".format(args.ifmap_sram_size))
+    logger.info("SRAM Filter:   {}".format(args.filter_sram_size))
+    logger.info("SRAM OFMAP:    {}".format(args.ofmap_sram_size))
+    logger.info("CSV file path: {}".format(args.network))
+    logger.info("Dataflow:      {}".format(args.data_flow))
+    logger.info("====================================================\n")
 
-    cycles = 0
+    global_eventq = EventQueue()
 
     model = Model(args)
-    hmc = HMC(args)
-    booksim = pybooksim.BookSim(args.booksim_config)
-    if args.collective == 'tree':
-        cc = TreeCC(args)
-    elif args.collective == 'ring':
-        cc = RingCC(args)
-    else:
-        raise RuntimeError('Unknow collective communication schedule: ' + args.collective)
+    logger.info('NN model size: {} hyperparameters\n'.format(model.size))
+
+    network = BookSim(args, global_eventq)
+
+    allreduce = construct_allreduce(args)
+    allreduce.compute_schedule(args.kary)
+
+    hmcs = []
+    from_network_message_buffers = []
+    to_network_message_buffers = []
+    for i in range(args.num_hmcs):
+        hmcs.append(HMC(i, args, global_eventq))
+        hmcs[i].load_model(model)
+        hmcs[i].startup()
+        # connect with network
+        from_network_message_buffers.append(MessageBuffer())
+        to_network_message_buffers.append(MessageBuffer())
+        from_network_message_buffers[i].set_consumer(hmcs[i])
+        to_network_message_buffers[i].set_consumer(network)
+        hmcs[i].set_message_buffers(from_network_message_buffers[i],
+                to_network_message_buffers[i])
+        hmcs[i].set_allreduce(allreduce)
+
+    network.set_message_buffers(to_network_message_buffers,
+            from_network_message_buffers)
+
+    return args, global_eventq, model, hmcs, network
 
 
-    compute_cycles = hmc.train(model)
-    cycles += compute_cycles
-    print('training compute cycles: ', compute_cycles)
+def do_sim_loop(eventq):
 
-    compute_cycles = hmc.aggregate(model)
-    cycles += compute_cycles
-    print('in-hmc weight aggregate cycles: ', compute_cycles)
+    while not eventq.empty():
+        cur_cycle, events = eventq.next_events()
 
-    booksim.SetSimTime(int(cycles))
+        for event in events:
+            event.process(cur_cycle)
 
-    num_messages = model.size * 4 / 64; # message size assumed 64 bytes for now
 
-    iteration = 0
-    future_comm = 0
-    future_cycles = np.zeros(args.num_hmcs, dtype=int)
-    levels = np.zeros(args.num_hmcs, dtype=int)
-    num_messages_remained = 0
-    num_messages_to_send = np.zeros(args.num_hmcs, dtype=int)
-    num_messages_received = np.zeros(args.num_hmcs, dtype=int)
+def main():
 
-    for src, dest in cc.get_reduce_pairs(iteration).items():
-        num_messages_to_send[src] = num_messages
-        num_messages_remained += num_messages
+    args, global_eventq, model, hmcs, network = init()
 
-    # Reduce phase for weight delta aggragation
-    while num_messages_remained or booksim.Idle() == False or future_comm:
-        # send messages
-        for src in range(args.num_hmcs):
-            if num_messages_to_send[src]:
-                dest = cc.get_reduce_dest(levels[src], src)
-                booksim.IssueMessage(src, dest, -1, pybooksim.Message.WriteRequest)
-                num_messages_to_send[src] -= 1
-                num_messages_remained -= 1
+    do_sim_loop(global_eventq)
 
-        # run interconnect for 1 cycle
-        booksim.WakeUp()
+    compute_cycles = hmcs[0].compute_cycles
+    allreduce_compute_cycles = 0
+    for hmc in hmcs:
+        if allreduce_compute_cycles < hmc.allreduce_compute_cycles:
+            allreduce_compute_cycles = hmc.allreduce_compute_cycles
+    cycles = global_eventq.cycles
+    allreduce_cycles = cycles - compute_cycles
+    pure_communication_cycles = allreduce_cycles - allreduce_compute_cycles
 
-        # peek and receive messages
-        for i in range(args.num_hmcs):
-            mid = booksim.PeekMessage(i, 0)
-            if mid != -1:
-                num_messages_received[i] += 1
-                #print('HMC ', i, ' receives a message (id:', mid, ')')
+    compute_percentile = compute_cycles / cycles * 100
+    allreduce_percentile = allreduce_cycles / cycles * 100
+    allreduce_compute_percentile = allreduce_compute_cycles / cycles * 100
+    pure_communication_percentile = allreduce_percentile - allreduce_compute_percentile
 
-                if num_messages_received[i] == model.size * 4 / 64:
-                    #print('schedule-level', levels[i], 'HMC', i, 'received all messages at cycle:', booksim.GetSimTime())
-                    num_messages_received[i] = 0
-                    future_cycles[i] = booksim.GetSimTime() + hmc.aggregate(model)
-                    levels[i] += 1
-                    if levels[i] < cc.get_iterations() and cc.reduce_sender_in_iteration(levels[i], i):
-                        future_comm += 1
+    logger.info('\n======== Simulation Summary ========')
+    logger.info('Training epoch runtime: {} cycles'.format(cycles))
+    logger.info(' - computation: {} cycles ({:.2f}%)'.format(compute_cycles, compute_percentile))
+    logger.info(' - allreduce: {} cycles ({:.2f}%)'.format(allreduce_cycles, allreduce_percentile))
+    logger.info('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
+    logger.info('     - pure communication: {} cycles ({:.2f}%)\n'.format(pure_communication_cycles, pure_communication_percentile))
 
-            if booksim.GetSimTime() == future_cycles[i] and \
-                    levels[i] < cc.get_iterations() and \
-                    cc.reduce_sender_in_iteration(levels[i], i):
-                future_comm -= 1
-                num_messages_to_send[i] = num_messages
-                num_messages_remained += num_messages
+    if args.dump:
+        cleanup(args)
 
-    print('max future_cycles: {}, booksim time: {}'.format(max(future_cycles), booksim.GetSimTime()))
-    reduce_comm_cycles = max(booksim.GetSimTime(), max(future_cycles)) - cycles
-    cycles += reduce_comm_cycles
-    print('reduce communication cycles: {}'.format(reduce_comm_cycles))
-
-    # Broadcast phase after weight delta reduction
-    levels = np.zeros(args.num_hmcs, dtype=int)
-    iteration = 0
-
-    for src, dest in cc.get_broadcast_pairs(iteration).items():
-        num_messages_to_send[src] = num_messages
-        num_messages_remained += num_messages
-
-    booksim.SetSimTime(cycles)
-    while num_messages_remained or booksim.Idle() == False:
-        # send messages
-        for src in range(args.num_hmcs):
-            if num_messages_to_send[src]:
-                dest = cc.get_broadcast_dest(levels[src], src)
-                mid = booksim.IssueMessage(src, dest, -1, pybooksim.Message.WriteRequest)
-                if mid != -1:
-                    num_messages_to_send[src] -= 1
-                    num_messages_remained -= 1
-                    if num_messages_to_send[src] == 0:
-                        levels[dest] = levels[src]
-                        levels[src] += 1
-                        if levels[src] < cc.get_iterations():
-                            assert cc.broadcast_sender_in_iteration(levels[src], src)
-                            num_messages_to_send[src] = num_messages
-                            num_messages_remained += num_messages
-
-        # run interconnect for 1 cycle
-        booksim.WakeUp()
-
-        # peek and receive messages
-        for i in range(args.num_hmcs):
-            mid = booksim.PeekMessage(i, 0)
-            if mid != -1:
-                num_messages_received[i] += 1
-                #print('HMC ', i, ' receives a message (id:', mid, ')')
-
-                if num_messages_received[i] == num_messages:
-                    #print('schedule-level', levels[i], 'HMC', i, 'received all messages at cycle:', booksim.GetSimTime())
-                    num_messages_received[i] = 0
-                    levels[i] += 1
-                    if levels[i] < cc.get_iterations():
-                        assert cc.broadcast_sender_in_iteration(levels[i], i)
-                        num_messages_to_send[i] = num_messages
-                        num_messages_remained += num_messages
-
-    broadcast_comm_cycles = booksim.GetSimTime() - cycles
-    print('broadcast communication cycles: {}'.format(broadcast_comm_cycles))
-    cycles += broadcast_comm_cycles
-    reduce_cycle_percent = reduce_comm_cycles / cycles * 100
-    broadcast_cycle_percent = broadcast_comm_cycles / cycles * 100
-    print('reduce cycles fraction: {:.2f} %, broadcast cycles fraction: {:.2f} %'.format(reduce_cycle_percent, broadcast_cycle_percent))
-
-    cleanup(args)
-
-    print('Training epoch cycles: ', cycles)
 
 if __name__ == '__main__':
     main()

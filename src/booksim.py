@@ -1,0 +1,71 @@
+import sys
+
+sys.path.append('booksim2/src')
+
+from sim_object import SimObject
+import pybooksim
+from eventq import EventQueue
+from message_buffer import *
+
+
+class BookSim(SimObject):
+    def __init__(self, args, eventq):
+        super().__init__(eventq)
+        self.name = 'BookSimNI'
+        self.args = args
+        self.booksim = pybooksim.BookSim(args.booksim_config)
+        self.local_eventq = EventQueue()
+        self.in_message_buffers = None
+        self.out_message_buffers = None
+
+
+    '''
+    set_message_buffers() - set message buffers connected with HMCs
+    @in_message_buffers: message buffers for incoming messages
+    @out_message_buffers: message buffers for outgoing messages
+    '''
+    def set_message_buffers(self, in_message_buffers, out_message_buffers):
+        self.in_message_buffers = in_message_buffers
+        self.out_message_buffers = out_message_buffers
+    # end of set_message_buffers
+
+
+    '''
+    schedule() - schedule the event at a given time
+    @event: the event to be scheduled
+    @cycle: scheduled time
+    '''
+    def schedule(self, event, cycle):
+        self.global_eventq.schedule(self, cycle)
+    # end of schedule()
+
+
+    '''
+    process() - event processing function in a particular cycle
+    @cur_cycle: the current cycle that with events to be processed
+    '''
+    def process(self, cur_cycle):
+        # send messages
+        for i in range(self.args.num_hmcs):
+            message = self.in_message_buffers[i].peek(cur_cycle)
+            if message:
+                assert message.src == i
+                self.booksim.IssueMessage(message.flow, i, message.dest, -1, message.type)
+                self.in_message_buffers[i].dequeue(cur_cycle)
+                #print('{} | {} | issues a {} message for flow {} from HMC-{} to HMC-{}'.format(cur_cycle, self.name, message.type, message.flow, i, message.dest))
+
+        self.booksim.SetSimTime(cur_cycle)
+        self.booksim.WakeUp()
+
+        # peek and receive messages
+        for i in range(self.args.num_hmcs):
+            flow, src, msgtype = self.booksim.PeekMessage(i, 0)
+            if src != -1:
+                assert flow != -1
+                message = Message(flow, src, i, 64, msgtype)
+                self.out_message_buffers[i].enqueue(message, cur_cycle, 1)
+                #print('{} | {} | peek a {} message for flow {} to HMC-{} from HMC-{}'.format(cur_cycle, self.name, msgtype, flow, i, src))
+
+        if not self.booksim.Idle():
+            self.schedule(self, cur_cycle + 1)
+    # end of process()

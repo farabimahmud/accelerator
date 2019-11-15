@@ -2,7 +2,7 @@
 
 ### On-going:
 - frequency and BW reflection of router and links
-- Ring-Allreduce (reduce-scatter and all-gather)
+- Allreduce integration with BookSim and ScaleSim
 
 ### Todo:
 - message passing interfaces for programmability and expressiveness
@@ -14,7 +14,7 @@
         - level by level from leaves to root
         - aggregate from children to parent for every node recursively until completion (binary tree like, 2x theoretical speedup)
 - support an array of accelerator instances as a distributed training system
-    - model-parallelism support 
+    - model-parallelism support
 
 ### Finished:
 - filter-weight gradient compute added in scale-sim simulator
@@ -28,3 +28,7 @@
 - DRAM BW reflection in scale-sim to support HMC
     - Note: SRAM and DRAM trace dump and BW calculation added, supposed HMC has sufficient BW
 - baseline implementation of Tree-based Collective Communication (Reduce and Broadcast)
+- Allreduce algorithms implemented
+    - Ring-Allreduce, MXNetTree-Allreduce, Multitree-Allreduce
+        - number of communication steps
+        - Communication schedules for reduce-scatter and all-gather

@@ -1,4 +1,4 @@
-import math 
+import math
 from tqdm import tqdm
 
 neg_inf = -1 * math.pow(2,32)
@@ -19,7 +19,7 @@ def sram_traffic(
     # Dimensions of output feature map channel
     E_h = (ifmap_h - filt_h + strides) / strides
     E_w = (ifmap_w - filt_w + strides) / strides
-    
+
     # Number of pixels in one convolution window
     px_per_conv_window = filt_h * filt_w * num_channels
     r2c = px_per_conv_window
@@ -28,7 +28,7 @@ def sram_traffic(
     num_ofmap_px = E_h * E_w * num_filt
     e2  = E_h * E_w
     e2m = num_ofmap_px
-    
+
     # Variables to calculate folds in runtime
     num_h_fold = math.ceil(e2/dimension_rows) # Jiayi: Each row for one element of ofmap (of a set of filters)
     num_v_fold = math.ceil(num_filt/dimension_cols) # Jiayi: Each column for one filter/ofmap channel
@@ -67,28 +67,33 @@ def sram_traffic(
     return(str_cycles, util)
 # End of sram_traffic()
 
-        
+
 def gen_read_trace(
         cycle = 0,
-        dim_rows = 4, 
+        dim_rows = 4,
         dim_cols = 4,
         num_v_fold = 1,
         num_h_fold = 1,
         ifmap_h = 7, ifmap_w = 7,
         filt_h = 3, filt_w =3,
         num_channels = 3, stride = 1,
-        ofmap_h =5, ofmap_w = 5, num_filters = 8, 
+        ofmap_h =5, ofmap_w = 5, num_filters = 8,
         filt_base = 1000000, ifmap_base = 0,
         sram_read_trace_file = "sram_read.csv",
         #sram_write_trace_file = "sram_write.csv"
 ):
+    if sram_read_trace_file == None:
+        dump = False
+    else:
+        dump = True
+
     # Layer specific variables
     r2c = filt_h * filt_w * num_channels # Jiayi: for one element of ofmap
     rc = filt_w * num_channels # Jiayi: for address calculation
     hc = ifmap_w * num_channels
     e2 = ofmap_h * ofmap_w
     #num_ofmap_px = e2 * num_filters
-    
+
     # Tracking variables
     local_cycle     = 0
     #remaining_px    = e2           # Need tracking for individual v folds
@@ -119,7 +124,7 @@ def gen_read_trace(
         #        (initially, r = ofmap_row_idx * ofmap_w + ofmap_col_idx)
         base_row_id = math.floor(r / ofmap_w) * stride
         base_col_id = r % ofmap_w * stride
-        base_addr  = base_row_id * hc + base_col_id * num_channels 
+        base_addr  = base_row_id * hc + base_col_id * num_channels
 
         if r < e2:
             clk_offset = r * -1             # Clock offset takes care of the skew due to store and forward
@@ -150,7 +155,8 @@ def gen_read_trace(
 
 
     # Open tracefile for writing
-    outfile     = open(sram_read_trace_file, 'w')
+    if dump:
+        outfile     = open(sram_read_trace_file, 'w')
     #ofmap_out   = open(sram_write_trace_file, 'w')
 
     # Adding progress bar
@@ -168,7 +174,7 @@ def gen_read_trace(
         filt_read  = ""
         rows_used = 0
         cols_used = 0
-        
+
         # Generate address for ifmap
         for r in range(dim_rows):
 
@@ -178,16 +184,17 @@ def gen_read_trace(
 
                 addr_row_offset = math.floor(inc / rc) * ifmap_w * num_channels
                 addr_col_offset = inc % rc
-                ifmap_addr = row_base_addr[r] + addr_row_offset + addr_col_offset 
-                ifmap_read += str(int(ifmap_addr)) + ", "
+                ifmap_addr = row_base_addr[r] + addr_row_offset + addr_col_offset
+                if dump:
+                    ifmap_read += str(int(ifmap_addr)) + ", "
                 rows_used += 1
-            else:
+            elif dump:
                 ifmap_read += ", "
 
             row_clk_offset[r] += 1
 
             if (row_clk_offset[r] > 0) and (row_clk_offset[r] % r2c == 0):   #Completed MAC for one OFMAP px
-                
+
                 row_ofmap_idx[r] += dim_rows # Jiayi: reinitialize to compute for next waiting OFMAP px
                 ofmap_idx = row_ofmap_idx[r]
 
@@ -251,11 +258,12 @@ def gen_read_trace(
         for c in range(dim_cols):
             if(col_clk_offset[c] >= 0):     # Take care of the skew
                 inc = col_clk_offset[c]
-                
+
                 filt_addr = col_base_addr[c] + inc + filt_base
-                filt_read += str(filt_addr) + ", "
+                if dump:
+                    filt_read += str(filt_addr) + ", "
                 cols_used += 1
-            else:
+            elif dump:
                 filt_read += ", "
 
             col_clk_offset[c] += 1
@@ -294,11 +302,12 @@ def gen_read_trace(
             if lane_done[c] == False:
                 filt_done = False
 
-                                                
+
         # Write to trace file
-        global_cycle = cycle + local_cycle
-        entry = str(global_cycle) + ", " + ifmap_read + filt_read + "\n"
-        outfile.write(entry)
+        if dump:
+            global_cycle = cycle + local_cycle
+            entry = str(global_cycle) + ", " + ifmap_read + filt_read + "\n"
+            outfile.write(entry)
 
         this_util = (rows_used * cols_used) / (dim_rows * dim_cols)
         util += this_util
@@ -307,7 +316,8 @@ def gen_read_trace(
         local_cycle += 1
 
     pbar.close()
-    outfile.close()
+    if dump:
+        outfile.close()
     #ofmap_out.close()
 
     #calculated_macs = util * dim_rows * dim_cols
@@ -332,6 +342,10 @@ def gen_write_trace(
         conv_window_size = 9,                      # The number of pixels in a convolution window
         sram_write_trace_file = "sram_write.csv"
 ):
+    if sram_write_trace_file == None:
+        dump = False
+    else:
+        dump = True
 
     # Layer specific variables
     r2c = conv_window_size
@@ -358,7 +372,8 @@ def gen_write_trace(
         base_addr_col.append(base_col)
 
     #Open the file for writing
-    outfile = open(sram_write_trace_file,"w")
+    if dump:
+        outfile = open(sram_write_trace_file,"w")
 
     #This is the cycle when all the OFMAP elements in the first col become available
     local_cycle = r2c + active_col - 1 # Jiayi: FIXME: r2c + active_row - 1?
@@ -375,11 +390,13 @@ def gen_write_trace(
             ofmap_trace = ""
             for c in range(active_col):
                 addr = ofmap_base + base_addr_col[c] + local_px * num_filters
-                ofmap_trace += str(addr) + ", "
+                if dump:
+                    ofmap_trace += str(addr) + ", "
 
             # Write the generated traces to the file
-            entry = str(local_cycle + r) + ", " + ofmap_trace + "\n"
-            outfile.write(entry)
+            if dump:
+                entry = str(local_cycle + r) + ", " + ofmap_trace + "\n"
+                outfile.write(entry)
 
         # Take care of the vertical fold
         if remaining_px == 0:
@@ -419,7 +436,8 @@ def gen_write_trace(
         else:   # If this is not a vertical fold then it is business as usual
             local_cycle += max(r2c, active_row)
 
-    outfile.close()
+    if dump:
+        outfile.close()
 
     #if sticky_flag:
     #    local_cycle += (active_row + active_col)

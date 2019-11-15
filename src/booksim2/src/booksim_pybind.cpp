@@ -27,6 +27,8 @@ PYBIND11_MODULE(pybooksim, m) {
     .value("WriteReply", Message::MessageType::WriteReply)
     .value("ControlRequest", Message::MessageType::ControlRequest)
     .value("ControlReply", Message::MessageType::ControlReply)
+    .value("ReduceData", Message::MessageType::ReduceData)
+    .value("GatherData", Message::MessageType::GatherData)
     .value("MessageType_NUM", Message::MessageType::MessageType_NUM)
     .export_values();
 };

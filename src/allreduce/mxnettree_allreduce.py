@@ -22,6 +22,21 @@ class MXNetTreeAllreduce(Allreduce):
 
 
     '''
+    compute_schedule() - computes spanning trees and schedule for the given network
+    @kary: build kary-trees
+    @alternate: Ture - allocate the links by alternating trees every allocation
+                False - allocating links for one tree as much as possble
+    @sort: Whether sort the trees for link allocation based on conflicts from
+           last allocation iteration
+    @verbose: print detailed info of tree construction process
+    '''
+    def compute_schedule(self, kary, alternate=True, sort=True, verbose=False):
+        self.compute_best_trees(10, kary, alternate, sort, verbose)
+        self.generate_schedule(verbose)
+    # end of compute_schedule()
+
+
+    '''
     compute_best_trees() - computes binary spanning trees for the given network
     @kary: build kary-trees
     @alternate: Ture - allocate the links by alternating trees every allocation
@@ -48,13 +63,13 @@ class MXNetTreeAllreduce(Allreduce):
 
         seeds = random.sample(range(0, end), trials)
         best_seed = None
-        best_iterations = None
+        best_timesteps = None
         for seed in seeds:
             random.seed(seed)
             self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
-            if best_iterations == None or best_iterations > self.iterations:
+            if best_timesteps == None or best_timesteps > self.timesteps:
                 best_seed = seed
-                best_iterations = self.iterations
+                best_timesteps = self.timesteps
 
         if best_seed != seeds[-1]:
             random.seed(best_seed)
@@ -92,7 +107,6 @@ class MXNetTreeAllreduce(Allreduce):
             if not self.silent:
                 filename = 'conflict_trees.dot'
 
-        filename = 'conflict_trees.dot'
         self.generate_conflict_trees(filename)
         self.mxnet_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
         #self.topdown_schedule(kary, alternate=alternate, cross_level=True, sort=sort, verbose=verbose)
@@ -1023,7 +1037,7 @@ class MXNetTreeAllreduce(Allreduce):
             for row in range(1, depth):
                 start = self.scan[root][row]
                 end = self.scan[root][row + 1]
-                iteration = depth - row
+                timestep = depth - row
                 if end > start and not row in ranks.keys():
                     ranks[row] = []
                 self.conflict_trees[root].append([])
@@ -1034,7 +1048,7 @@ class MXNetTreeAllreduce(Allreduce):
                         if parent == child: # no self loop, redundant
                             continue
                         ranks[row].append(child)
-                        tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, iteration))
+                        tree += ''.join('    {} -> {} [ label="{}" ];\n'.format(child, parent, timestep))
                         self.conflict_trees[root][row - 1].append((self.topology[root][i], self.topology[root][i - 1]))
 
         tree += '    // note that rank is used in the subgraph\n'
@@ -1118,17 +1132,17 @@ class MXNetTreeAllreduce(Allreduce):
 
         # tree construction
         num_trees = 0
-        self.iterations = 0
+        self.timesteps = 0
 
         from_nodes = deepcopy(self.network.from_nodes)
 
-        # keep track of number of new children added for the iteration, constrained by k-ary
+        # keep track of number of new children added for the timestep, constrained by k-ary
         num_new_children = {}
         for root in range(self.network.nodes):
             num_new_children[root] = {}
 
         if verbose:
-            print('iteration {}'.format(self.iterations))
+            print('timestep {}'.format(self.timesteps))
 
         # sort the roots based on link conflicts during allocation
         sorted_roots = list(range(self.network.nodes))
@@ -1154,9 +1168,9 @@ class MXNetTreeAllreduce(Allreduce):
                     if child in from_nodes[parent]: # link available
                         if parent not in num_new_children[root].keys():
                             num_new_children[root][parent] = 0
-                        # all dependent children of 'child' have been scheduled in eariler iteration
-                        # and parent's readix < k in current iteration
-                        if child not in tree_level_nodes[root][self.iterations] and \
+                        # all dependent children of 'child' have been scheduled in eariler timesteps
+                        # and parent's readix < k in current timestep
+                        if child not in tree_level_nodes[root][self.timesteps] and \
                                 pending_dependent_children[root][child] == 0 and \
                                 num_new_children[root][parent] < kary - 1:
                             num_new_children[root][parent] += 1
@@ -1167,8 +1181,8 @@ class MXNetTreeAllreduce(Allreduce):
                                 print('    before: {}'.format(self.trees[root]))
                             tree_nodes[root].add(child)
                             from_nodes[parent].remove(child)
-                            self.trees[root].append((child, parent, self.iterations))
-                            tree_level_nodes[root][self.iterations].append(parent)
+                            self.trees[root].append((child, parent, self.timesteps))
+                            tree_level_nodes[root][self.timesteps].append(parent)
                             pending_dependent_children[root][parent] -= 1
                             if verbose:
                                 print('    after : {}'.format(self.trees[root]))
@@ -1187,8 +1201,8 @@ class MXNetTreeAllreduce(Allreduce):
                                     print(' ** {} dependent child(ren) of {} not added yet'.format(
                                         pending_dependent_children[root][child], child))
                                 else:
-                                    assert child in tree_level_nodes[root][self.iterations]
-                                    print(' ** child {} already added as parent in this iteration'.format(child))
+                                    assert child in tree_level_nodes[root][self.timesteps]
+                                    print(' ** child {} already added as parent in this timestep'.format(child))
                     else:
                         conflicts[root] += 1
                         if verbose:
@@ -1204,8 +1218,8 @@ class MXNetTreeAllreduce(Allreduce):
                         assert len(expanded_conflict_trees[root]) == 0
                     num_trees += 1
                     if verbose:
-                        print('iteration {} - tree {} constructed: {}'.format(
-                            self.iterations, root, self.trees[root]))
+                        print('timestep {} - tree {} constructed: {}'.format(
+                            self.timesteps, root, self.trees[root]))
 
             if sort:
                 #print('before sorting: {}'.format(sorted_roots))
@@ -1216,13 +1230,13 @@ class MXNetTreeAllreduce(Allreduce):
 
             if not change:
                 from_nodes = deepcopy(self.network.from_nodes)
-                self.iterations += 1
+                self.timesteps += 1
                 if verbose:
-                    print('iteration {}'.format(self.iterations))
+                    print('timestep {}'.format(self.timesteps))
 
                 # reset for new iteration
                 for root in range(self.network.nodes):
-                    tree_level_nodes[root][self.iterations] = []
+                    tree_level_nodes[root][self.timesteps] = []
                     num_new_children[root] = {}
 
         # verify that there is no link conflicts
@@ -1238,10 +1252,10 @@ class MXNetTreeAllreduce(Allreduce):
         for root in range(self.network.nodes):
             tree = self.trees[root]
             self.trees[root] = []
-            for child, parent, iteration in reversed(tree):
-                self.trees[root].append((child, parent, self.iterations - iteration))
+            for child, parent, timestep in reversed(tree):
+                self.trees[root].append((child, parent, self.timesteps - timestep))
 
-        self.iterations += 1
+        self.timesteps += 1
     #def mxnet_schedule(self, kary, alternative=True, cross_level=True, verbose=False)
 
 
@@ -1293,17 +1307,17 @@ class MXNetTreeAllreduce(Allreduce):
 
         # tree construction
         num_trees = 0
-        self.iterations = 0
+        self.timesteps = 0
 
         from_nodes = deepcopy(self.network.from_nodes)
 
-        # keep track of number of new children added for the iteration, constrained by k-ary
+        # keep track of number of new children added for the timestep, constrained by k-ary
         num_new_children = {}
         for root in range(self.network.nodes):
             num_new_children[root] = {}
 
         if verbose:
-            print('iteration {}'.format(self.iterations))
+            print('timestep {}'.format(self.timesteps))
 
         # sort the roots based on link conflicts during allocation
         sorted_roots = list(range(self.network.nodes))
@@ -1329,9 +1343,9 @@ class MXNetTreeAllreduce(Allreduce):
                     if child in from_nodes[parent]: # link available
                         if parent not in num_new_children[root].keys():
                             num_new_children[root][parent] = 0
-                        # parent has been scheduled in earilier iteration (first two checks)
-                        # and parent's readix < k in current iteration
-                        if parent not in tree_level_nodes[root][self.iterations] and \
+                        # parent has been scheduled in earilier timesteps (first two checks)
+                        # and parent's readix < k in current timestep
+                        if parent not in tree_level_nodes[root][self.timesteps] and \
                                 parent in tree_nodes[root] and \
                                 num_new_children[root][parent] < kary - 1:
                             num_new_children[root][parent] += 1
@@ -1342,8 +1356,8 @@ class MXNetTreeAllreduce(Allreduce):
                                 print('    before: {}'.format(self.trees[root]))
                             tree_nodes[root].append(child)
                             from_nodes[parent].remove(child)
-                            self.trees[root].append((child, parent, self.iterations))
-                            tree_level_nodes[root][self.iterations].append(child)
+                            self.trees[root].append((child, parent, self.timesteps))
+                            tree_level_nodes[root][self.timesteps].append(child)
                             if verbose:
                                 print('    after : {}'.format(self.trees[root]))
                                 print('    tree nodes: {}'.format(tree_nodes[root]))
@@ -1361,8 +1375,8 @@ class MXNetTreeAllreduce(Allreduce):
                                 elif parent not in tree_nodes[root]:
                                     print(' ** parent {} not added yet'.format(parent))
                                 else:
-                                    assert parent in tree_level_nodes[root][self.iterations]
-                                    print(' ** child {} already added in this iteration'.format(child))
+                                    assert parent in tree_level_nodes[root][self.timesteps]
+                                    print(' ** child {} already added in this timestep'.format(child))
                     else:
                         conflicts[root] += 1
                         if verbose:
@@ -1376,8 +1390,8 @@ class MXNetTreeAllreduce(Allreduce):
                         assert len(expanded_conflict_trees[root]) == 0
                     num_trees += 1
                     if verbose:
-                        print('iteration {} - tree {} constructed: {}'.format(
-                            self.iterations, root, self.trees[root]))
+                        print('timestep {} - tree {} constructed: {}'.format(
+                            self.timesteps, root, self.trees[root]))
 
             if sort:
                 #print('before sorting: {}'.format(sorted_roots))
@@ -1388,13 +1402,13 @@ class MXNetTreeAllreduce(Allreduce):
 
             if not change:
                 from_nodes = deepcopy(self.network.from_nodes)
-                self.iterations += 1
+                self.timesteps += 1
                 if verbose:
-                    print('iteration {}'.format(self.iterations))
+                    print('timestep {}'.format(self.timesteps))
 
-                # reset for new iteration
+                # reset for new timestep
                 for root in range(self.network.nodes):
-                    tree_level_nodes[root][self.iterations] = []
+                    tree_level_nodes[root][self.timesteps] = []
                     num_new_children[root] = {}
 
         # verify that there is no link conflicts
@@ -1407,8 +1421,66 @@ class MXNetTreeAllreduce(Allreduce):
                     print('tree {}: {}'.format(i, self.trees[i]))
                     exit()
 
-        self.iterations += 1
+        self.timesteps += 1
     #def topdown_schedule(self, kary, alternative=True, cross_level=True, verbose=False)
+
+
+    '''
+    generate_schedule()
+    @verbose: print the generated schedules
+
+    desc - generate reduce_scatter_schedule and all_gather_schedule from trees
+    '''
+    def generate_schedule(self, verbose=False):
+        # compute parent-children dependency
+        self.trees_parent = {}
+        self.trees_children = {}
+        for root in range(self.network.nodes):
+            self.trees_parent[root] = {}
+            self.trees_parent[root][root] = None
+            self.trees_children[root] = {}
+            for node in range(self.network.nodes):
+                self.trees_children[root][node] = []
+            for child_parent_row in self.conflict_trees[root]:
+                for child, parent in child_parent_row:
+                    self.trees_parent[root][child] = parent
+                    self.trees_children[root][parent].append(child)
+
+        # initialize the schedules
+        self.reduce_scatter_schedule = {}
+        self.all_gather_schedule = {}
+
+        trees = deepcopy(self.conflict_trees)
+
+        for node in range(self.network.nodes):
+            self.reduce_scatter_schedule[node] = [{node: (None, self.trees_children[node][node])}]
+            self.all_gather_schedule[node] = [{}]
+
+        change = True
+        while change:
+            change = False
+
+            for root in range(self.network.nodes):
+                if trees[root]:
+                    child_parent_row = trees[root].pop()
+                    for child, parent in child_parent_row:
+                        # TODO: It seems dict is ordered by key in python implementation, may optimize later
+                        self.reduce_scatter_schedule[child][0][root] = (parent, self.trees_children[root][child])
+                        if root not in self.all_gather_schedule[parent][0].keys():
+                            self.all_gather_schedule[parent][0][root] = ([], self.trees_parent[root][parent])
+                        self.all_gather_schedule[parent][0][root][0].append(child)
+                        change = True
+
+        if verbose:
+            for node in range(self.network.nodes):
+                print('Accelerator {}:'.format(node))
+                print('  reduce-scatter schedule:')
+                for timestep, schedule in enumerate(self.reduce_scatter_schedule[node]):
+                    print('    timestep {}: {}'.format(timestep, schedule))
+                print('  all-gather schedule:')
+                for timestep, schedule in enumerate(self.all_gather_schedule[node]):
+                    print('    timestep {}: {}'.format(timestep, schedule))
+    # def generate_schedule(self, verbose=False)
 
 
 def test(args):
@@ -1426,8 +1498,8 @@ def test(args):
     same = {}
     worse = {}
     comparison_distribution = {'Better': 0, 'Same': 0, 'Worse': 0}
-    total_iterations = 0
-    total_sort_iterations = 0
+    total_timesteps = 0
+    total_sort_timesteps = 0
     num_seeds = 0
     # NOTE: It seems sorted won't help much due to random picks to break ties in the during KL algorithm.
     #       Sometimes better and sometimes worse, most of the time are same. Seed 47 run forever, buggy!
@@ -1441,48 +1513,49 @@ def test(args):
         allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
         if args.gendotfile:
             allreduce.generate_trees_dotfile('mxnettree.dot')
-        iterations = allreduce.iterations
+        timesteps = allreduce.timesteps
+        allreduce.generate_schedule(verbose=False)
         if allreduce.backtrack:
-            print('MXNetTreeAllreduce takes {} iterations'.format(allreduce.iterations))
+            print('MXNetTreeAllreduce takes {} timesteps'.format(allreduce.timesteps))
             continue
         allreduce.mxnet_schedule(kary, alternate=True, sort=True, verbose=False)
         if args.gendotfile:
             allreduce.generate_trees_dotfile('mxnettree_sort.dot')
-        sort_iterations = allreduce.iterations
-        #print('MXNetTreeAllreduce (sorted) takes {} iterations'.format(allreduce.iterations))
-        if iterations > sort_iterations:
+        sort_timesteps = allreduce.timesteps
+        allreduce.generate_schedule()
+        if timesteps > sort_timesteps:
             compare = 'Better'
-            diff = iterations - sort_iterations
+            diff = timesteps - sort_timesteps
             if diff in better.keys():
                 better[diff] += 1
             else:
                 better[diff] = 1
-        elif iterations == sort_iterations:
+        elif timesteps == sort_timesteps:
             compare = 'Same'
-            if iterations in same.keys():
-                same[iterations] += 1
+            if timesteps in same.keys():
+                same[timesteps] += 1
             else:
-                same[iterations] = 1
+                same[timesteps] = 1
         else:
             compare = 'Worse'
-            diff = sort_iterations - iterations
+            diff = sort_timesteps - timesteps
             if diff in worse.keys():
                 worse[diff] += 1
             else:
                 worse[diff] = 1
         comparison_distribution[compare] += 1
         num_seeds += 1
-        total_iterations += iterations
-        total_sort_iterations += sort_iterations
-        print('Seed {}: MXNetTreeAllreduce takes {} iterations (no sort), and {} iterations (sort), {}'.format(
-            seed, iterations, sort_iterations, compare))
+        total_timesteps += timesteps
+        total_sort_timesteps += sort_timesteps
+        print('Seed {}: MXNetTreeAllreduce takes {} timesteps (no sort), and {} timesteps (sort), {}'.format(
+            seed, timesteps, sort_timesteps, compare))
     if num_seeds > 1:
         print('Comparison distribution: {}'.format(comparison_distribution))
         print('Iteration distribution for Same: {}'.format(same))
         print('Iteration difference for Better: {}'.format(better))
         print('Iteration difference for Worse: {}'.format(worse))
-        print('Average iterations: {} (no sort), and {} (sort)'.format(
-            total_iterations / num_seeds, total_sort_iterations / num_seeds))
+        print('Average timesteps: {} (no sort), and {} (sort)'.format(
+            total_timesteps / num_seeds, total_sort_timesteps / num_seeds))
 
 
 if __name__ == '__main__':

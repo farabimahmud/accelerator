@@ -1,5 +1,8 @@
-import math 
+import math
 from tqdm import tqdm
+import logging
+
+logger = logging.getLogger(__name__)
 
 neg_inf = -1 * math.pow(2,32)
 
@@ -39,7 +42,7 @@ def sram_train(
     num_h_fold_filter_gradient = math.ceil(filter_size / dimension_rows)
     num_v_fold_filter_gradient = math.ceil(ofmap_channels / dimension_cols)
 
-    print(' - compute input-gradient:')
+    logger.info(' - compute input-gradient:')
     input_grad_read_cycles, input_grad_util = gen_input_gradient_read_trace(
             cycle = 0,
             dim_rows = dimension_rows,
@@ -66,9 +69,9 @@ def sram_train(
             sram_write_trace_file = sram_ifmap_gradient_write_trace_file
             )
     input_grad_cycles = max(input_grad_read_cycles, input_grad_write_cycles)
-    print(' -- input-gradient: read cycles: ', input_grad_read_cycles, ', write cycles: ', input_grad_write_cycles)
+    logger.info(' -- input-gradient: read cycles: {}, write cycles: {}'.format(input_grad_read_cycles, input_grad_write_cycles))
 
-    print(' - compute filter-gradient:')
+    logger.info(' - compute filter-gradient:')
     filter_grad_read_cycles, filter_grad_util = gen_filter_gradient_read_trace(
             cycle = input_grad_cycles,
             dim_rows = dimension_rows,
@@ -97,13 +100,13 @@ def sram_train(
     total_cycles = max(filter_grad_read_cycles, filter_grad_write_cycles)
     filter_grad_read_cycles -= input_grad_cycles
     filter_grad_write_cycles -= input_grad_cycles
-    print(' -- filter-gradient: read cycles: ', filter_grad_read_cycles, ', write cycles: ', filter_grad_write_cycles)
+    logger.info(' -- filter-gradient: read cycles: {}, write cycles: {}'.format(filter_grad_read_cycles, filter_grad_write_cycles))
 
     filter_grad_cycles = max(filter_grad_read_cycles, filter_grad_write_cycles)
     cycles = input_grad_cycles + filter_grad_cycles
     assert cycles == total_cycles
-    print(' - input-gradient-cycles: ', input_grad_read_cycles, ', uitl: ', input_grad_util, '%')
-    print(' - filter-gradent-cycles: ', filter_grad_cycles, ', uitl: ', filter_grad_util, '%')
+    logger.info(' - input-gradient-cycles: {}, uitl: {} %'.format(input_grad_read_cycles, input_grad_util))
+    logger.info(' - filter-gradent-cycles: {}, uitl: {} %'.format(filter_grad_cycles, filter_grad_util))
     util = (input_grad_util * input_grad_read_cycles + filter_grad_util * filter_grad_read_cycles) / \
             (input_grad_read_cycles + filter_grad_read_cycles)
 
@@ -122,6 +125,13 @@ def gen_filter_gradient_read_trace(
         ifmap_base = 0, ofmap_gradient_base = 8000000,
         sram_read_trace_file = 'sram_read.csv'
         ):
+
+    # dump traces or not
+    if sram_read_trace_file == None:
+        dump = False
+    else:
+        dump = True
+
     # Layer specific variables
     num_ofmap_channels = num_filters
     px_per_delta_weight = ofmap_h * ofmap_w # for one element of delta_filter
@@ -152,6 +162,7 @@ def gen_filter_gradient_read_trace(
 
     # This initialization assumes num_rows << filter_size
     # This assignment logic needs to modified if that is not the case
+    assert dim_rows < filter_size # TODO: need to change to fit other cases, a lot
     for r in range(dim_rows):
         # Calculate base_addr of ifmap for a particular filter element
         base_row_col_id = math.floor(r / num_channels)
@@ -187,9 +198,11 @@ def gen_filter_gradient_read_trace(
         h_fold_col.append(0)
 
     # Open trace file for writing
-    tracefile = open(sram_read_trace_file, 'a')
+    if dump:
+        tracefile = open(sram_read_trace_file, 'a')
 
     # Progress bar
+    num_computed_weight_delta = 0
     total = filter_size * num_v_fold
     pbar = tqdm(total = total)
 
@@ -197,7 +210,8 @@ def gen_filter_gradient_read_trace(
     # The condition checks
     #       1)  if the all the input traces for last v fold is generated
     # and   2)  if all the ofmap traces have been generated
-    while ifmap_done == False or ofmap_gradient_done == False:
+    #while ifmap_done == False or ofmap_gradient_done == False:
+    while num_computed_weight_delta != total: # account for the emptying phase of the systolic array
         ifmap_read_trace = ''
         ofmap_gradient_read_trace = ''
         rows_used = 0
@@ -213,9 +227,10 @@ def gen_filter_gradient_read_trace(
                 addr_row_offset = math.floor(linear_idx / ofmap_w) * ifmap_w * num_channels
                 addr_col_offset = linear_idx % ofmap_w * num_channels
                 ifmap_addr = row_base_addr[r] + addr_row_offset + addr_col_offset
-                ifmap_read_trace += str(ifmap_addr) + ', '
+                if dump:
+                    ifmap_read_trace += str(ifmap_addr) + ', '
                 rows_used += 1
-            else:
+            elif dump:
                 ifmap_read_trace += ', '
 
             row_clk_offset[r] += 1
@@ -225,6 +240,7 @@ def gen_filter_gradient_read_trace(
                 filter_idx = row_filter_idx[r]
 
                 # Update progress bar
+                num_computed_weight_delta += 1
                 pbar.update(1)
 
                 if filter_idx < filter_size:
@@ -289,10 +305,11 @@ def gen_filter_gradient_read_trace(
                 base_row_offset = math.floor(linear_idx / ofmap_w) * ofmap_w * num_ofmap_channels
                 base_col_offset = linear_idx % ofmap_w * num_ofmap_channels
                 ofmap_addr = col_base_addr[c] + base_row_offset + base_col_offset + ofmap_gradient_base
-                ofmap_gradient_read_trace += str(ofmap_addr) + ', '
+                if dump:
+                    ofmap_gradient_read_trace += str(ofmap_addr) + ', '
 
                 cols_used += 1
-            else:
+            elif dump:
                 ofmap_gradient_read_trace += ', '
 
             col_clk_offset[c] += 1
@@ -329,9 +346,10 @@ def gen_filter_gradient_read_trace(
                 break
 
         # Write to trace file
-        global_cycle = cycle + local_cycle
-        entry = str(global_cycle) + ', ' + ifmap_read_trace + ofmap_gradient_read_trace + '\n'
-        tracefile.write(entry)
+        if dump:
+            global_cycle = cycle + local_cycle
+            entry = str(global_cycle) + ', ' + ifmap_read_trace + ofmap_gradient_read_trace + '\n'
+            tracefile.write(entry)
 
         this_util = (rows_used * cols_used) / (dim_rows * dim_cols)
         util += this_util
@@ -340,7 +358,8 @@ def gen_filter_gradient_read_trace(
         local_cycle += 1
 
     pbar.close()
-    tracefile.close()
+    if dump:
+        tracefile.close()
 
     #calculated_macs = util * dim_rows * dim_cols
     #macs = (ofmap_h * ofmap_w) * filter_size * num_filters
@@ -363,6 +382,11 @@ def gen_filter_gradient_write_trace(
         conv_window_size = 25,
         sram_write_trace_file = 'sram_write.csv'
         ):
+
+    if sram_write_trace_file == None:
+        dump = False
+    else:
+        dump = True
 
     # Layer specific variables
     filter_size = filt_h * filt_w * num_channels
@@ -388,7 +412,8 @@ def gen_filter_gradient_write_trace(
         base_addr_col.append(base_col)
 
     # Open trace file for writing
-    tracefile = open(sram_write_trace_file, 'a')
+    if dump:
+        tracefile = open(sram_write_trace_file, 'a')
 
     # This is the cycle when all the filter weights in the first col become available
     local_cycle = conv_window_size + active_row - 1 # FIXME
@@ -405,11 +430,13 @@ def gen_filter_gradient_write_trace(
             filter_write_trace = ''
             for c in range(active_col):
                 addr = filter_gradient_base + base_addr_col[c] + local_px * num_channels
-                filter_write_trace += str(addr) + ', '
+                if dump:
+                    filter_write_trace += str(addr) + ', '
 
             # Write the generated traces to the file
-            entry = str(cycle + local_cycle + r) + ', ' + filter_write_trace + '\n'
-            tracefile.write(entry)
+            if dump:
+                entry = str(cycle + local_cycle + r) + ', ' + filter_write_trace + '\n'
+                tracefile.write(entry)
 
         # Take care of the vertical fold
         if remaining_px == 0:
@@ -446,7 +473,8 @@ def gen_filter_gradient_write_trace(
         else:   # If this is not a vertical fold then it is business as usual
             local_cycle += max(conv_window_size, active_row)
 
-    tracefile.close()
+    if dump:
+        tracefile.close()
 
     return local_cycle + cycle
 # gen_filter_gradient_write_trace() end
@@ -464,6 +492,11 @@ def gen_input_gradient_read_trace(
         ofmap_gradient_base = 8000000, filter_base = 4000000,
         sram_read_trace_file = 'sram_read.csv'
         ):
+
+    if sram_read_trace_file == None:
+        dump = False
+    else:
+        dump = True
 
     # Layer specific variables
     padded_ofmap_h = (filt_h - 1) + stride * (ofmap_h - 1) + 1
@@ -542,9 +575,11 @@ def gen_input_gradient_read_trace(
         h_fold_col.append(0)
 
     # Open trace file for writing
-    tracefile = open(sram_read_trace_file, 'a')
+    if dump:
+        tracefile = open(sram_read_trace_file, 'a')
 
     # Progress bar
+    num_computed_ifmap_delta = 0
     total = ifmap_size_per_channel * num_v_fold
     pbar = tqdm(total = total)
 
@@ -582,9 +617,10 @@ def gen_input_gradient_read_trace(
                     addr_row_offset = actual_row_id * ofmap_w * num_ofmap_channels
                     addr_col_offset = actual_col_id * num_ofmap_channels
                     ofmap_gradient_addr = addr_row_offset + addr_col_offset + ofmap_ch_id + ofmap_gradient_base
-                    ofmap_gradient_read_trace += str(ofmap_gradient_addr) + ', '
+                    if dump:
+                        ofmap_gradient_read_trace += str(ofmap_gradient_addr) + ', '
 
-                else:
+                elif dump:
                     # Padded zero
                     ofmap_gradient_read_trace += ', '
 
@@ -597,6 +633,7 @@ def gen_input_gradient_read_trace(
                 ifmap_idx = row_ifmap_idx[r]
 
                 # Update progress bar
+                num_computed_ifmap_delta += 1
                 pbar.update(1)
 
                 if ifmap_idx < ifmap_size_per_channel:
@@ -664,10 +701,11 @@ def gen_input_gradient_read_trace(
                 base_filter_offset = filter_idx * filter_size
 
                 filter_addr = col_base_addr[c] + base_filter_offset + base_row_offset + base_col_offset + filter_base
-                filter_read_trace += str(filter_addr) + ', '
+                if dump:
+                    filter_read_trace += str(filter_addr) + ', '
 
                 cols_used += 1
-            else:
+            elif dump:
                 filter_read_trace += ', '
 
             col_clk_offset[c] += 1
@@ -704,9 +742,10 @@ def gen_input_gradient_read_trace(
                 break
 
         # Write to trace file
-        global_cycle = cycle + local_cycle
-        entry = str(global_cycle) + ', ' + ofmap_gradient_read_trace + filter_read_trace + '\n'
-        tracefile.write(entry)
+        if dump:
+            global_cycle = cycle + local_cycle
+            entry = str(global_cycle) + ', ' + ofmap_gradient_read_trace + filter_read_trace + '\n'
+            tracefile.write(entry)
 
         this_util = (rows_used * cols_used) / (dim_rows * dim_cols)
         util += this_util
@@ -714,8 +753,10 @@ def gen_input_gradient_read_trace(
         # Cycle update
         local_cycle += 1
 
+    assert num_computed_ifmap_delta == total
     pbar.close()
-    tracefile.close()
+    if dump:
+        tracefile.close()
 
     #calculated_macs = util * dim_rows * dim_cols
     #macs = px_per_delta_ifmap * ifmap_size_per_channel * num_channels
@@ -738,6 +779,11 @@ def gen_input_gradient_write_trace(
         conv_window_size = 9,
         sram_write_trace_file = 'sram_write.csv'
         ):
+
+    if sram_write_trace_file == None:
+        dump = False
+    else:
+        dump = True
 
     # Layer specific variables
     ifmap_size_per_channel = ifmap_h * ifmap_w
@@ -763,7 +809,8 @@ def gen_input_gradient_write_trace(
         base_addr_col.append(base_col)
 
     # Open trace file for writing
-    tracefile = open(sram_write_trace_file, 'a')
+    if dump:
+        tracefile = open(sram_write_trace_file, 'a')
 
     # This is the cycle when all the filter weights in the first col become available
     local_cycle = conv_window_size + active_row - 1 # FIXME
@@ -780,10 +827,12 @@ def gen_input_gradient_write_trace(
             ifmap_gradeint_write_trace = ''
             for c in range(active_col):
                 addr = ifmap_gradient_base + base_addr_col[c] + local_px * num_channels
-                ifmap_gradeint_write_trace += str(addr) + ', '
+                if dump:
+                    ifmap_gradeint_write_trace += str(addr) + ', '
 
-            entry = str(cycle + local_cycle + r) + ', ' + ifmap_gradeint_write_trace + '\n'
-            tracefile.write(entry)
+            if dump:
+                entry = str(cycle + local_cycle + r) + ', ' + ifmap_gradeint_write_trace + '\n'
+                tracefile.write(entry)
 
         # Take care of the vertical fold
         if remaining_px == 0:
@@ -820,7 +869,8 @@ def gen_input_gradient_write_trace(
         else:   # If this is not a vertical fold then it is business as usual
             local_cycle += max(conv_window_size, active_row)
 
-    tracefile.close()
+    if dump:
+        tracefile.close()
 
     return local_cycle + cycle
 # gen_input_gradient_write_trace()
