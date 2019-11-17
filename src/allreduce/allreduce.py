@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from abc import ABC, abstractmethod
 
 
@@ -92,8 +93,8 @@ class Allreduce(ABC):
     '''
     def generate_trees_dotfile(self, filename):
         # color palette for ploting nodes of different tree levels
-        colors = ['#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7', '#df65b0',
-                '#e7298a', '#ce1256', '#980043', '#67001f']
+        colors = ['#ffffff', '#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7',
+                '#df65b0', '#e7298a', '#ce1256', '#980043', '#67001f']
 
         tree = 'digraph tree {\n'
         tree += '  rankdir = BT;\n'
@@ -222,6 +223,49 @@ class Allreduce(ABC):
             f.write(trees[root])
             f.close()
     # def generate_trees_dotfile(self, filename)
+
+
+    '''
+    max_num_concurrent_flows() - compute the concurrent flows for an accelerator
+    '''
+    def max_num_concurrent_flows(self):
+        max_concurrent_reduce_scatter = np.zeros(self.network.nodes, dtype=int)
+        max_concurrent_reduce_scatter_timestep = np.zeros(self.network.nodes, dtype=int)
+        for root in range(self.network.nodes):
+            timesteps = len(self.reduce_scatter_schedule[root])
+            for timestep in range(timesteps):
+                num_concurrent_reduce_scatter = len(self.reduce_scatter_schedule[root][timestep])
+                if max_concurrent_reduce_scatter[root] < num_concurrent_reduce_scatter:
+                    max_concurrent_reduce_scatter[root] = num_concurrent_reduce_scatter
+                    max_concurrent_reduce_scatter_timestep[root] = timestep + 1
+
+        max_concurrent_all_gather = np.zeros(self.network.nodes, dtype=int)
+        max_concurrent_all_gather_timestep = np.zeros(self.network.nodes, dtype=int)
+        for root in range(self.network.nodes):
+            timesteps = len(self.all_gather_schedule[root])
+            for timestep in range(timesteps):
+                num_concurrent_all_gather = 0
+                for flow, children_parent_dependency in self.all_gather_schedule[root][timestep].items():
+                    num_concurrent_all_gather += len(children_parent_dependency[0])
+                if max_concurrent_all_gather[root] < num_concurrent_all_gather:
+                    max_concurrent_all_gather[root] = num_concurrent_all_gather
+                    max_concurrent_all_gather_timestep[root] = timestep + 1
+
+        for root in range(self.network.nodes):
+            print('Tree {}:'.format(root))
+            print('  - reduce-scatter schedules:')
+            for timestep in range(len(self.reduce_scatter_schedule[root])):
+                print('    step {}: {}'.format(timestep + 1, self.reduce_scatter_schedule[root][timestep]))
+            print('  - all-gather schedules:')
+            for timestep in range(len(self.all_gather_schedule[root])):
+                print('    step {}: {}'.format(timestep + 1, self.all_gather_schedule[root][timestep]))
+            print('  - max number of concurrent reduce-scatter is {} (at timestep {})'
+                    ', and and all-gather communications is {} (at timestep {})'.format(
+                        max_concurrent_reduce_scatter[root],
+                        max_concurrent_reduce_scatter_timestep[root],
+                        max_concurrent_all_gather[root],
+                        max_concurrent_all_gather_timestep[root]))
+    # end of max_num_concurrent_flows()
 
 
 import networks
