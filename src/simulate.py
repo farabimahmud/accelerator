@@ -81,8 +81,8 @@ def init():
         logging.basicConfig(filename=logfile, format='%(message)s', level=logging.INFO)
 
     for scope in args.enable_logger:
-        logger = logging.getLogger(scope)
-        logger.setLevel(logging.DEBUG)
+        debug_logger = logging.getLogger(scope)
+        debug_logger.setLevel(logging.DEBUG)
 
     config = cp.ConfigParser()
     config.read(args.arch_config)

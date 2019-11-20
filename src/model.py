@@ -28,8 +28,8 @@ class Model:
             # Do not continue if incomplete line
             if len(elems) < 9:
                 if elems[0]:
-                    logger.warn('Warn: incomplete model layer description: line ', self.num_layers + 1)
-                    logger.warn(' -- ', row)
+                    logger.warn('Warn: incomplete model layer description: line {}'.format(self.num_layers + 1))
+                    logger.warn(' -- {}'.format(row))
                 continue
 
 

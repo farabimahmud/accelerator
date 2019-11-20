@@ -11,5 +11,5 @@ do
     --network SCALE-Sim/topologies/mlperf/'$nn'.csv \
     --run-name '$nn' \
     --booksim-config booksim2/runfiles/mesh44express.cfg \
-    --dump > logs/'$nn'.log &\n'
+    > logs/'$nn'.log &\n'
 done

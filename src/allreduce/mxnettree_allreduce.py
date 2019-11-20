@@ -3,10 +3,12 @@ import numpy as np
 import random
 from datetime import datetime
 from copy import deepcopy
+import logging
 
 import networks
 from allreduce import Allreduce
 
+logger = logging.getLogger(__name__)
 
 class MXNetTreeAllreduce(Allreduce):
     def __init__(self, args, network):
@@ -62,9 +64,14 @@ class MXNetTreeAllreduce(Allreduce):
             end = trials * 10
 
         seeds = random.sample(range(0, end), trials)
+        logger.info('MXNetTree random seeds for trials: {}'.format(seeds))
         best_seed = None
         best_timesteps = None
         for seed in seeds:
+            if seed == 47:
+                logger.info('BAD: Skip random seed {} ...'.format(seed))
+                continue
+            logger.info('Trying random seed {} ...'.format(seed))
             random.seed(seed)
             self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
             if best_timesteps == None or best_timesteps > self.timesteps:
