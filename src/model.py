@@ -59,11 +59,4 @@ class Model:
                              self.layers[l]['num_channels'],
                              self.layers[l]['num_filters'],
                              self.layers[l]['stride']))
-            #logger.debug('layer ', l, ': {name: ', self.layers[l]['name'],
-            #        ', ifmap_h: ', self.layers[l]['ifmap_h'], ', ifmap_w: ', self.layers[l]['ifmap_w'],
-            #        ', filter_h: ', self.layers[l]['filter_h'], ', filter_w', self.layers[l]['filter_w'],
-            #        ', num_channels: ', self.layers[l]['num_channels'],
-            #        ', num_filters: ', self.layers[l]['num_filters'],
-            #        ', stride: ', self.layers[l]['stride'], '}')
-
     # parse_model() end
