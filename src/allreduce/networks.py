@@ -1,15 +1,17 @@
 import os
+import argparse
 import numpy as np
 from copy import deepcopy
 
 class Torus:
-    def __init__(self, nodes, dimension):
-        self.nodes = nodes
-        self.dimension = dimension
+    def __init__(self, args):
+        self.args = args
+        self.nodes = args.dimension * args.dimension
+        self.dimension = args.dimension
         self.from_nodes = {}
         self.to_nodes = {}
         self.edges = []
-        self.adjacency_matrix = np.zeros((nodes, nodes))
+        self.adjacency_matrix = np.zeros((self.nodes, self.nodes))
 
 
     def build_graph(self, filename=None):
@@ -105,7 +107,14 @@ class Torus:
 def test():
     dimension = 4
     nodes = dimension * dimension
-    network = Torus(nodes=nodes, dimension=dimension)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dimension', default=4, type=int,
+                        help='network dimension, default is 4')
+
+    args = parser.parse_args()
+
+    network = Torus(args)
     network.build_graph()
 
 

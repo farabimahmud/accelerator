@@ -5,8 +5,8 @@ from allreduce import Allreduce
 
 
 class RingAllreduce(Allreduce):
-    def __init__(self, network):
-        super().__init__(network)
+    def __init__(self, args, network):
+        super().__init__(args, network)
         self.ring = []
 
 
@@ -116,21 +116,21 @@ class RingAllreduce(Allreduce):
 
             # reduce-scatter scheduled from 'leaf'
             rs_subflow = child
-            self.reduce_scatter_schedule[node].append({rs_subflow: (parent, [])})
+            self.reduce_scatter_schedule[node].append({rs_subflow: ((parent, 0), [])})
             # all-gather scheduled from 'root'
             ag_subflow = node
-            self.all_gather_schedule[node].append({ag_subflow: ([child], None)})
+            self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], None)})
             # add remianing schedules
             for i in range(self.network.nodes - 2):
                 # reduce-scatter
                 rs_subflow = self.ring[(index + i + 2) % self.network.nodes]
-                self.reduce_scatter_schedule[node].append({rs_subflow: (parent, [child])})
+                self.reduce_scatter_schedule[node].append({rs_subflow: ((parent, 0), [child])})
 
                 # all-gather
                 ag_subflow = self.ring[index - i - 1]
-                self.all_gather_schedule[node].append({ag_subflow: ([child], parent)})
+                self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], parent)})
 
-            self.reduce_scatter_schedule[node].append({node: (None, [child])})
+            self.reduce_scatter_schedule[node].append({node: ((None, None), [child])})
 
             if verbose:
                 print('Accelerator {}:'.format(node))
@@ -180,14 +180,14 @@ class RingAllreduce(Allreduce):
 
 def test(args):
     dimension = args.dimension
-    nodes = dimension * dimension
-    network = networks.Torus(nodes, dimension)
+    network = networks.Torus(args)
     network.build_graph()
     # network.to_nodes[1].clear() # test no solution case
 
-    allreduce = RingAllreduce(network)
+    allreduce = RingAllreduce(args, network)
     allreduce.compute_trees(verbose=False)
     allreduce.generate_schedule(verbose=False)
+    allreduce.max_num_concurrent_flows()
     if args.gendotfile:
         allreduce.generate_ring_dotfile('ring.dot')
         allreduce.generate_trees_dotfile('ring_trees.dot')

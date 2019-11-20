@@ -1,5 +1,7 @@
 from collections import defaultdict
+import logging
 
+logger = logging.getLogger(__name__)
 
 class Message:
     def __init__(self, flow, src, dest, size, msgtype):
@@ -11,7 +13,8 @@ class Message:
 
 
 class MessageBuffer:
-    def __init__(self, max_size=0):
+    def __init__(self, name, max_size=0):
+        self.name = name
         self.max_size = max_size
         self.message_queue = defaultdict(list)
         self.consumer = None
@@ -33,6 +36,11 @@ class MessageBuffer:
     def peek(self, cur_cycle):
         message = None
         if cur_cycle in self.message_queue.keys():
+            if len(self.message_queue[cur_cycle]) != 1:
+                logger.debug('Message Buffer {} has {} messages (not exactly 1) at cycle {}'.format(self.name, len(self.message_queue[cur_cycle]), cur_cycle))
+                for i, message in enumerate(self.message_queue[cur_cycle]):
+                    logger.debug('message {} ({}): {}'.format(i, message, message.__dict__))
+                raise RuntimeError('Message Buffer {} has {} messages (not exactly 1) at cycle {}'.format(self.name, len(self.message_queue[cur_cycle]), cur_cycle))
             assert len(self.message_queue[cur_cycle]) == 1
             message = self.message_queue[cur_cycle][0]
 

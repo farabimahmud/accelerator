@@ -1,9 +1,11 @@
 import os
+import numpy as np
 from abc import ABC, abstractmethod
 
 
 class Allreduce(ABC):
-    def __init__(self, network):
+    def __init__(self, args, network):
+        self.args = args
         self.network = network
         self.trees = None
         self.trees_parent = None
@@ -13,21 +15,21 @@ class Allreduce(ABC):
         schedules are organized as list of list, the list with lower index
         in the schedule should be scheduled earlier.
         - reduce_scatter_schedule:
-            subflow: (parent, [dependent children]) // subflow is 'tree' root
+            subflow: ((parent, dest_ni), [dependent children]) // subflow is 'tree' root
         - all_gather_schedule:
-            subflow: ([children], dependent parent)
+            subflow: ([(child1, dest_ni1), ..., (child_n, dest_ni_n)], dependent parent)
         Ring:
             0->1->2->3->0
             reduce_scatter_schedule[0] = [
-                {3: (1, [])},
-                {2: (1, [3])},
-                {1: (1, [3])},
-                {0: (None, [3])}
+                {3: ((1, 0), [])},
+                {2: ((1, 0), [3])},
+                {1: ((1, 0), [3])},
+                {0: ((None, None), [3])} # indicate finish this reduce-scatter
             ]
             all_gather_schedule[0] = [
-                {0: ([1], None)},
-                {3: ([1], 3)},
-                {2: ([1], 3)}
+                {0: ([(1, 0)], None)},
+                {3: ([(1, 0)], 3)},
+                {2: ([(1, 0)], 3)}
             ]
         MXNet: (only dependencies among children and parent)
               Tree 0      Tree 1        Tree 2        Tree 3
@@ -35,24 +37,24 @@ class Allreduce(ABC):
               0   1       1   3         2   3         3   1
             0  2 1  3   1  0 3  2     2  0 3  1     3  2 1  0
             reduce_scatter_schedule[3] = [
-                {0: (1, []), 1: (1, [2]), 2: (2, [1]), 3: (None, [2, 1])}
+                {0: ((1, 0), []), 1: ((1, 3), [2]), 2: ((2, 1), [1]), 3: ((None, None), [1, 2])}
             ]
             all_gather_schedule[3] = [
-                {1: ([2], 1), 2: ([1], 2), 3: ([1, 2], None)}
+                {1: ([(2, 1)], 1), 2: ([(1, 0)], 2), 3: ([(2, 2), (1, 2)], None)}
             ]
         MultiTree:
             Timestep    Tree 0      Tree 1        Tree 2        Tree 3
                 2         0           1             2             3
-                1          2           3             0             1
-                0       1   3       0   2         3   1         2   0
+                1        1 2         0 3           3 0           2 1
+                0           3           2             1             0
             reduce_scatter_schedule[0] = [
-                {1: (1, []), 3: (1, [])},
-                {2: (2, [1])},
-                {0: (None, [1, 2])}
+                {3: ((1, 0), [])}                   # step 1
+                {1: ((1, 1), []), 2: ((2, 0), [1])} # step 2
+                {0: ((None, None), [2, 1])}
             ]
             all_gather_schedule[0] = [
-                {0: ([2], None)},
-                {0: ([1], None), 2: ([1], 2)}
+                {0: ([(2, 0), (1, 0)], None)}       # step 1
+                {2: ([(1, 0)], 2)}                  # step 2
             ]
         '''
         self.reduce_scatter_schedule = None
@@ -92,8 +94,8 @@ class Allreduce(ABC):
     '''
     def generate_trees_dotfile(self, filename):
         # color palette for ploting nodes of different tree levels
-        colors = ['#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7', '#df65b0',
-                '#e7298a', '#ce1256', '#980043', '#67001f']
+        colors = ['#ffffff', '#f7f4f9', '#e7e1ef', '#d4b9da', '#c994c7',
+                '#df65b0', '#e7298a', '#ce1256', '#980043', '#67001f']
 
         tree = 'digraph tree {\n'
         tree += '  rankdir = BT;\n'
@@ -224,6 +226,49 @@ class Allreduce(ABC):
     # def generate_trees_dotfile(self, filename)
 
 
+    '''
+    max_num_concurrent_flows() - compute the concurrent flows for an accelerator
+    '''
+    def max_num_concurrent_flows(self):
+        max_concurrent_reduce_scatter = np.zeros(self.network.nodes, dtype=int)
+        max_concurrent_reduce_scatter_timestep = np.zeros(self.network.nodes, dtype=int)
+        for root in range(self.network.nodes):
+            timesteps = len(self.reduce_scatter_schedule[root])
+            for timestep in range(timesteps):
+                num_concurrent_reduce_scatter = len(self.reduce_scatter_schedule[root][timestep])
+                if max_concurrent_reduce_scatter[root] < num_concurrent_reduce_scatter:
+                    max_concurrent_reduce_scatter[root] = num_concurrent_reduce_scatter
+                    max_concurrent_reduce_scatter_timestep[root] = timestep + 1
+
+        max_concurrent_all_gather = np.zeros(self.network.nodes, dtype=int)
+        max_concurrent_all_gather_timestep = np.zeros(self.network.nodes, dtype=int)
+        for root in range(self.network.nodes):
+            timesteps = len(self.all_gather_schedule[root])
+            for timestep in range(timesteps):
+                num_concurrent_all_gather = 0
+                for flow, children_parent_dependency in self.all_gather_schedule[root][timestep].items():
+                    num_concurrent_all_gather += len(children_parent_dependency[0])
+                if max_concurrent_all_gather[root] < num_concurrent_all_gather:
+                    max_concurrent_all_gather[root] = num_concurrent_all_gather
+                    max_concurrent_all_gather_timestep[root] = timestep + 1
+
+        for root in range(self.network.nodes):
+            print('Tree {}:'.format(root))
+            print('  - reduce-scatter schedules:')
+            for timestep in range(len(self.reduce_scatter_schedule[root])):
+                print('    step {}: {}'.format(timestep + 1, self.reduce_scatter_schedule[root][timestep]))
+            print('  - all-gather schedules:')
+            for timestep in range(len(self.all_gather_schedule[root])):
+                print('    step {}: {}'.format(timestep + 1, self.all_gather_schedule[root][timestep]))
+            print('  - max number of concurrent reduce-scatter is {} (at timestep {})'
+                    ', and and all-gather communications is {} (at timestep {})'.format(
+                        max_concurrent_reduce_scatter[root],
+                        max_concurrent_reduce_scatter_timestep[root],
+                        max_concurrent_all_gather[root],
+                        max_concurrent_all_gather_timestep[root]))
+    # end of max_num_concurrent_flows()
+
+
 import networks
 from ring_allreduce import RingAllreduce
 from multitree_allreduce import MultiTreeAllreduce
@@ -241,15 +286,17 @@ return: an allreduce object
 def construct_allreduce(args):
     dimension = int(math.sqrt(args.num_hmcs))
     assert args.num_hmcs == dimension * dimension
-    network = networks.Torus(args.num_hmcs, dimension)
+    args.nodes = args.num_hmcs
+    args.dimension = dimension
+    network = networks.Torus(args)
     network.build_graph()
 
     if args.allreduce == 'multitree':
-        allreduce = MultiTreeAllreduce(network)
+        allreduce = MultiTreeAllreduce(args, network)
     elif args.allreduce == 'mxnettree':
-        allreduce = MXNetTreeAllreduce(network)
+        allreduce = MXNetTreeAllreduce(args, network)
     elif args.allreduce == 'ring':
-        allreduce = RingAllreduce(network)
+        allreduce = RingAllreduce(args, network)
     else:
         raise RuntimeError('Unknow allreduce schedule: ' + args.allreduce)
 

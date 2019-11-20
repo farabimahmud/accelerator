@@ -35,8 +35,8 @@ class HMC(SimObject):
         self.compute_cycles = 0
         self.allreduce_compute_cycles = 0
 
-        self.from_network_message_buffer = None
-        self.to_network_message_buffer = None
+        self.from_network_message_buffers = None
+        self.to_network_message_buffers = None
 
         self.model = None
         self.bytes_per_param = 4 # bytes
@@ -50,11 +50,12 @@ class HMC(SimObject):
         self.reduce_scatter_schedule = None
         self.all_gather_schedule = None
 
-        self.sending = None
+        self.sending = [None for i in range(self.args.radix)]
+        self.free_nis = set([i for i in range(self.args.radix)])
         self.pending_aggregations = []
         self.step = 0
         # the local accelerator can only control what to send but not what to receive
-        self.messages_sent = 0
+        self.messages_sent = [0] * self.args.radix
         self.messages_received = {'reduce-scatter': [{} for i in range(self.args.num_hmcs)],
                                   'all-gather': [0] * self.args.num_hmcs}
 
@@ -79,9 +80,13 @@ class HMC(SimObject):
     '''
     def startup(self):
         # currently start from training
-        self.computation_state = 'idle'
         self.communication_state = 'idle'
-        self.local_eventq.schedule('training', 0)
+        if self.args.only_allreduce == False:
+            self.computation_state = 'idle'
+            self.local_eventq.schedule('training', 0)
+        else:
+            self.computation_state = 'aggregating'
+            self.local_eventq.schedule('finish-aggregation', 0)
         self.global_eventq.schedule(self, 0)
     # end of startup()
 
@@ -102,12 +107,14 @@ class HMC(SimObject):
 
     '''
     set_message_buffers() - set message buffers connected with network
-    @from_network_message_buffer: message buffer for incoming messages
-    @to_network_message_buffer: message buffer for outgoing messages
+    @from_network_message_buffers: message buffers for incoming messages
+    @to_network_message_buffers: message buffers for outgoing messages
     '''
-    def set_message_buffers(self, from_network_message_buffer, to_network_message_buffer):
-        self.from_network_message_buffer = from_network_message_buffer
-        self.to_network_message_buffer = to_network_message_buffer
+    def set_message_buffers(self, from_network_message_buffers, to_network_message_buffers):
+        assert len(from_network_message_buffers) == self.args.radix
+        assert len(to_network_message_buffers) == self.args.radix
+        self.from_network_message_buffers = from_network_message_buffers
+        self.to_network_message_buffers = to_network_message_buffers
     # end of set_message_buffers
 
 
@@ -181,7 +188,7 @@ class HMC(SimObject):
                             level = i
                             break
                     self.reduce_scatter_schedule[level][flow][1].remove(child)
-                    if self.sending == None:
+                    if len(self.free_nis) > 0:
                         self.schedule('reduce-scatter', cur_cycle + 1)
 
             logger.info('{} | {} | finishes aggregation , computation state: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
@@ -203,123 +210,176 @@ class HMC(SimObject):
 
         if 'reduce-scatter' in events:
             assert self.communication_state == 'reduce-scatter'
-            assert self.sending == None
+            assert len(self.free_nis) > 0
             assert self.reduce_scatter_schedule
-            assert self.messages_sent == 0
-            send_flow = None
-            parent = None
-            for flow, schedule in self.reduce_scatter_schedule[0].items():
-                depending_children = schedule[1]
-                if len(depending_children) == 0:
-                    send_flow = flow
-                    parent = schedule[0]
-                    break
-            if send_flow != None:
-                self.reduce_scatter_schedule[0].pop(send_flow)
-                if len(self.reduce_scatter_schedule[0]) == 0:
-                    self.reduce_scatter_schedule.pop(0)
-                if parent != None:
-                    self.sending = (send_flow, parent)
-                    self.schedule('send-reduce-message', cur_cycle + 1)
-                    logger.info('{} | {} | start reducing for flow {} to parent HMC-{}'.format(cur_cycle, self.name, send_flow, parent))
+            allocated_nis = []
+            # schedule to send out ready reduce-scatter to available NIs
+            for ni in self.free_nis:
+                assert self.messages_sent[ni] == 0
+                send_flow = None
+                parent = None
+                dest_ni = None
+                if len(self.all_gather_schedule) > 0:
+                    for flow, schedule in self.reduce_scatter_schedule[0].items():
+                        depending_children = schedule[1]
+                        if len(depending_children) == 0:
+                            send_flow = flow
+                            parent = schedule[0][0]
+                            dest_ni = schedule[0][1]
+                            break
+                if send_flow != None:
+                    self.reduce_scatter_schedule[0].pop(send_flow)
+                    if len(self.reduce_scatter_schedule[0]) == 0:
+                        self.reduce_scatter_schedule.pop(0)
+                    if parent != None:
+                        assert dest_ni != None
+                        assert self.sending[ni] == None
+                        self.sending[ni] = (send_flow, parent, dest_ni)
+                        allocated_nis.append(ni)
+                        logger.info('{} | {} | start reducing for flow {} (from NI {}) to parent HMC-{} (to NI {})'.format(cur_cycle, self.name, send_flow, ni, parent, dest_ni))
+                    else:
+                        if len(self.reduce_scatter_schedule) == 0 and len(self.free_nis) == self.args.radix:
+                            self.communication_state = 'all-gather'
+                            self.schedule('all-gather', cur_cycle + 1)
+                            logger.info('{} | {} | schedule all-gather'.format(cur_cycle, self.name))
+                        break
                 else:
-                    if len(self.reduce_scatter_schedule) == 0:
-                        self.communication_state = 'all-gather'
-                        self.schedule('all-gather', cur_cycle + 1)
-                        logger.debug('{} | {} | schedule all-gather'.format(cur_cycle, self.name))
+                    break
+            # allocate NIs
+            for ni in allocated_nis:
+                self.free_nis.remove(ni)
+            if len(allocated_nis) > 0:
+                self.schedule('send-reduce-message', cur_cycle + 1)
             events.remove('reduce-scatter')
 
         if 'send-reduce-message' in events:
-            flow = self.sending[0]
-            dest = self.sending[1]
-            message = Message(flow, self.id, dest, self.message_size, pybooksim.Message.ReduceData)
-            self.to_network_message_buffer.enqueue(message, cur_cycle, 1)
-            self.messages_sent += 1
-            #print('{} | {} | sends a reduce message to for flow {} to parent HMC-{}'.format(cur_cycle, self.name, flow, dest))
-            if self.messages_sent < self.num_messages:
-                self.schedule('send-reduce-message', cur_cycle + 1)
-            else:
-                logger.info('{} | {} | finishes reducing for flow {} to parent HMC-{}'.format(cur_cycle, self.name, flow, dest))
-                self.messages_sent = 0
-                self.sending = None
-                if len(self.reduce_scatter_schedule) > 0:
-                    self.schedule('reduce-scatter', cur_cycle + 1)
+            assert self.communication_state == 'reduce-scatter'
+            for ni, sending in enumerate(self.sending):
+                if sending == None:
+                    continue
+                flow = sending[0]
+                dest = sending[1]
+                dest_ni = sending[2]
+                src_node = self.id * self.args.radix + ni
+                dest_node = dest * self.args.radix + dest_ni
+                message = Message(flow, src_node, dest_node, self.message_size, pybooksim.Message.ReduceData)
+                self.to_network_message_buffers[ni].enqueue(message, cur_cycle, 1)
+                self.messages_sent[ni] += 1
+                #print('{} | {} | sends a reduce message to for flow {} (from NI {}) to parent HMC-{} (to NI {})'.format(cur_cycle, self.name, flow, ni, dest, dest_ni))
+                if self.messages_sent[ni] < self.num_messages:
+                    self.schedule('send-reduce-message', cur_cycle + 1)
+                else:
+                    logger.info('{} | {} | finishes reducing for flow {} (from NI {}) to parent HMC-{} (to NI {})'.format(cur_cycle, self.name, flow, ni, dest, dest_ni))
+                    self.messages_sent[ni] = 0
+                    self.sending[ni] = None
+                    self.free_nis.add(ni)
+                    if len(self.reduce_scatter_schedule) > 0:
+                        self.schedule('reduce-scatter', cur_cycle + 1)
+                    elif len(self.free_nis) == self.args.radix:
+                        self.communication_state = 'all-gather'
+                        self.schedule('all-gather', cur_cycle + 1)
+                        logger.info('{} | {} | schedule all-gather'.format(cur_cycle, self.name))
+                        break
             events.remove('send-reduce-message')
 
         if 'all-gather' in events:
             assert self.communication_state == 'all-gather'
-            assert self.messages_sent == 0
-            assert self.sending == None
-            assert self.all_gather_schedule
-            send_flow = None
-            for flow, schedule in self.all_gather_schedule[0].items():
-                depending_parent = schedule[1]
-                if depending_parent == None:
-                    send_flow = flow
+            assert len(self.all_gather_schedule) > 0
+            assert len(self.free_nis) > 0
+            allocated_nis = []
+            for ni in self.free_nis:
+                assert self.messages_sent[ni] == 0
+                assert self.sending[ni] == None
+                send_flow = None
+                if len(self.all_gather_schedule) > 0:
+                    for flow, schedule in self.all_gather_schedule[0].items():
+                        depending_parent = schedule[1]
+                        if depending_parent == None:
+                            send_flow = flow
+                            break
+                if send_flow != None:
+                    child, dest_ni = self.all_gather_schedule[0][send_flow][0].pop(0)
+                    if len(self.all_gather_schedule[0][send_flow][0]) == 0:
+                        self.all_gather_schedule[0].pop(send_flow)
+                    if len(self.all_gather_schedule[0]) == 0:
+                        self.all_gather_schedule.pop(0)
+                    self.sending[ni] = (send_flow, child, dest_ni)
+                    allocated_nis.append(ni)
+                    logger.info('{} | {} | start gathering for flow {} (from NI {}) to child HMC-{} (to NI {})'.format(cur_cycle, self.name, send_flow, ni, child, dest_ni))
+                else:
                     break
-            if send_flow != None:
-                child = self.all_gather_schedule[0][send_flow][0].pop(0)
-                if len(self.all_gather_schedule[0][send_flow][0]) == 0:
-                    self.all_gather_schedule[0].pop(send_flow)
-                if len(self.all_gather_schedule[0]) == 0:
-                    self.all_gather_schedule.pop(0)
-                self.sending = (send_flow, child)
+            # allocate NIs
+            for ni in allocated_nis:
+                self.free_nis.remove(ni)
+            if len(allocated_nis) > 0:
                 self.schedule('send-gather-message', cur_cycle + 1)
-                logger.info('{} | {} | start gathering for flow {} to child HMC-{}'.format(cur_cycle, self.name, send_flow, child))
             events.remove('all-gather')
 
         if 'send-gather-message' in events:
             assert self.communication_state == 'all-gather'
-            flow = self.sending[0]
-            dest = self.sending[1]
-            message = Message(flow, self.id, dest, self.message_size, pybooksim.Message.GatherData)
-            self.to_network_message_buffer.enqueue(message, cur_cycle, 1)
-            self.messages_sent += 1
-            #print('{} | {} | sends a gather message to for flow {} to child HMC-{}'.format(cur_cycle, self.name, flow, dest))
-            if self.messages_sent < self.num_messages:
-                self.schedule('send-gather-message', cur_cycle + 1)
-            else:
-                self.messages_sent = 0
-                self.sending = None
-                if len(self.all_gather_schedule) > 0:
-                    self.schedule('all-gather', cur_cycle + 1)
+            for ni, sending in enumerate(self.sending):
+                if sending == None:
+                    continue
+                flow = sending[0]
+                dest = sending[1]
+                dest_ni = sending[2]
+                src_node = self.id * self.args.radix + ni
+                dest_node = dest * self.args.radix + dest_ni
+                message = Message(flow, src_node, dest_node, self.message_size, pybooksim.Message.GatherData)
+                self.to_network_message_buffers[ni].enqueue(message, cur_cycle, 1)
+                self.messages_sent[ni] += 1
+                #print('{} | {} | sends a gather message to for flow {} (from NI {}) to child HMC-{} (to NI {})'.format(cur_cycle, self.name, flow, ni, dest, dest_ni))
+                if self.messages_sent[ni] < self.num_messages:
+                    self.schedule('send-gather-message', cur_cycle + 1)
                 else:
-                    self.communication_state = 'idle'
-                    logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
+                    self.messages_sent[ni] = 0
+                    self.sending[ni] = None
+                    self.free_nis.add(ni)
+                    if len(self.all_gather_schedule) > 0:
+                        self.schedule('all-gather', cur_cycle + 1)
+                    else:
+                        self.communication_state = 'idle'
+                        logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
             events.remove('send-gather-message')
 
         if 'incoming-message' in events:
-            message = self.from_network_message_buffer.peek(cur_cycle)
-            self.from_network_message_buffer.dequeue(cur_cycle)
-            assert message != None
-            if message.type == pybooksim.Message.ReduceData:
-                #print('{} | {} | receives a reduce messsage for flow {} from child HMC-{}'.format(cur_cycle, self.name, message.flow, message.src))
-                self.messages_received['reduce-scatter'][message.flow][message.src] += 1
-                if self.messages_received['reduce-scatter'][message.flow][message.src] == self.num_messages:
-                    logger.info('{} | {} | receives full reduce for flow {} from child HMC-{}'.format(cur_cycle, self.name, message.flow, message.src))
-                    self.messages_received['reduce-scatter'][message.flow][message.src] = 0
-                    if self.computation_state == 'idle':
-                        self.schedule('aggregation', cur_cycle + 1)
-                    self.pending_aggregations.append((message.flow, message.src))
-            elif message.type == pybooksim.Message.GatherData:
-                self.messages_received['all-gather'][message.flow] += 1
-                #print('{} | {} | receives a gather messsage for flow {} from parent HMC-{}'.format(cur_cycle, self.name, message.flow, message.src))
-                # clear all the dependencies
-                if self.messages_received['all-gather'][message.flow] == self.num_messages:
-                    self.messages_received['all-gather'][message.flow] = 0
-                    logger.info('{} | {} | receives full gather for flow {} from parent HMC-{}'.format(cur_cycle, self.name, message.flow, message.src))
-                    if len(self.all_gather_schedule) != 0:
-                        for i, schedules in enumerate(self.all_gather_schedule):
-                            if message.flow in schedules.keys():
-                                if message.src == schedules[message.flow][1]: # from depending parent
-                                    children = self.all_gather_schedule[i][message.flow][0]
-                                    self.all_gather_schedule[i][message.flow] = (children, None)
-                        if self.sending == None and len(self.reduce_scatter_schedule) == 0:
-                            self.communication_state = 'all-gather'
-                            self.schedule('all-gather', cur_cycle + 1)
-                    else:
-                        self.state = 'idle'
-                        logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
+            for ni, message_buffer in enumerate(self.from_network_message_buffers):
+                message = message_buffer.peek(cur_cycle)
+                if message == None:
+                    continue
+                self.from_network_message_buffers[ni].dequeue(cur_cycle)
+                src = message.src // self.args.radix
+                src_ni = message.src % self.args.radix
+                if message.type == pybooksim.Message.ReduceData:
+                    #print('{} | {} | receives a reduce messsage for flow {} (at NI {}) from child HMC-{} (from NI {})'.format(cur_cycle, self.name, message.flow, ni, src, src_ni))
+                    self.messages_received['reduce-scatter'][message.flow][src] += 1
+                    if self.messages_received['reduce-scatter'][message.flow][src] == self.num_messages:
+                        logger.info('{} | {} | receives full reduce for flow {} (at NI {}) from child HMC-{} (from NI {})'.format(cur_cycle, self.name, message.flow, ni, src, src_ni))
+                        self.messages_received['reduce-scatter'][message.flow][src] = 0
+                        if self.computation_state == 'idle':
+                            self.schedule('aggregation', cur_cycle + 1)
+                        self.pending_aggregations.append((message.flow, src))
+                elif message.type == pybooksim.Message.GatherData:
+                    self.messages_received['all-gather'][message.flow] += 1
+                    #print('{} | {} | receives a gather messsage for flow {} (at NI {}) from parent HMC-{} (from NI {})'.format(cur_cycle, self.name, message.flow, ni, src, src_ni))
+                    # clear all the dependencies
+                    if self.messages_received['all-gather'][message.flow] == self.num_messages:
+                        self.messages_received['all-gather'][message.flow] = 0
+                        logger.info('{} | {} | receives full gather for flow {} (at NI {}) from parent HMC-{} (from NI {})'.format(cur_cycle, self.name, message.flow, ni, src, src_ni))
+                        if len(self.all_gather_schedule) > 0:
+                            for i, schedules in enumerate(self.all_gather_schedule):
+                                if message.flow in schedules.keys():
+                                    if src == schedules[message.flow][1]: # from depending parent
+                                        children = self.all_gather_schedule[i][message.flow][0]
+                                        self.all_gather_schedule[i][message.flow] = (children, None)
+                            if self.communication_state == 'all-gather' and len(self.free_nis) > 0:
+                                self.schedule('all-gather', cur_cycle + 1)
+                            #if len(self.free_nis) > 0 and len(self.reduce_scatter_schedule) == 0:
+                            #    self.communication_state = 'all-gather'
+                            #    self.schedule('all-gather', cur_cycle + 1)
+                        else:
+                            self.state = 'idle'
+                            logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
             events.remove('incoming-message')
 
         if len(events) != 0:

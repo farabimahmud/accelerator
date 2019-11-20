@@ -7,8 +7,8 @@ from allreduce import Allreduce
 
 
 class MultiTreeAllreduce(Allreduce):
-    def __init__(self, network):
-        super().__init__(network)
+    def __init__(self, args, network):
+        super().__init__(args, network)
 
 
     '''
@@ -195,6 +195,8 @@ class MultiTreeAllreduce(Allreduce):
             reduce_scatter_schedule[node] = {}
             all_gather_schedule[node] = {}
 
+        reduce_scatter_ni = np.zeros((self.network.nodes, self.timesteps), dtype=int)
+        all_gather_ni = np.zeros((self.network.nodes, self.timesteps), dtype=int)
         for root in range(self.network.nodes):
             for edge in self.trees[root]:
                 # reduce-scatter
@@ -205,7 +207,8 @@ class MultiTreeAllreduce(Allreduce):
                 # send from rs_child to rs_parent for tree root at rs_timestep
                 if rs_timestep not in reduce_scatter_schedule[rs_child].keys():
                     reduce_scatter_schedule[rs_child][rs_timestep] = {}
-                reduce_scatter_schedule[rs_child][rs_timestep][root] = (rs_parent, self.trees_children[root][rs_child])
+                reduce_scatter_schedule[rs_child][rs_timestep][root] = ((rs_parent, reduce_scatter_ni[rs_parent][rs_timestep]), self.trees_children[root][rs_child])
+                reduce_scatter_ni[rs_parent][rs_timestep] = (reduce_scatter_ni[rs_parent][rs_timestep] + 1) % self.args.radix
 
                 # all-gather
                 ag_child = edge[0]
@@ -217,7 +220,8 @@ class MultiTreeAllreduce(Allreduce):
                     all_gather_schedule[ag_parent][ag_timestep] = {}
                 if root not in all_gather_schedule[ag_parent][ag_timestep].keys():
                     all_gather_schedule[ag_parent][ag_timestep][root] = ([], self.trees_parent[root][ag_parent])
-                all_gather_schedule[ag_parent][ag_timestep][root][0].append(ag_child)
+                all_gather_schedule[ag_parent][ag_timestep][root][0].append((ag_child, all_gather_ni[ag_child][ag_timestep]))
+                all_gather_ni[ag_child][ag_timestep] = (all_gather_ni[ag_child][ag_timestep] + 1) % self.args.radix
 
         # initialize the schedules
         self.reduce_scatter_schedule = {}
@@ -237,7 +241,7 @@ class MultiTreeAllreduce(Allreduce):
                 else:
                     if verbose:
                         print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
-            self.reduce_scatter_schedule[node].append({node: (None, self.trees_children[node][node])})
+            self.reduce_scatter_schedule[node].append({node: ((None, None), self.trees_children[node][node])})
             if verbose:
                 print('    root children: {}'.format(self.reduce_scatter_schedule[node][-1]))
 
@@ -255,12 +259,11 @@ class MultiTreeAllreduce(Allreduce):
 
 def test(args):
     dimension = args.dimension
-    nodes = dimension * dimension
-    network = networks.Torus(nodes, dimension)
+    network = networks.Torus(args)
     network.build_graph()
 
     kary = args.kary
-    allreduce = MultiTreeAllreduce(network)
+    allreduce = MultiTreeAllreduce(args, network)
     # NOTE: sorted doesn't help for multitree since it only considers available links
     allreduce.compute_trees(kary, alternate=True, sort=False)
     if args.gendotfile:
@@ -273,6 +276,7 @@ def test(args):
         allreduce.generate_per_tree_dotfile('multitreedot')
     sort_timesteps = allreduce.timesteps
     allreduce.generate_schedule()
+    allreduce.max_num_concurrent_flows()
     if timesteps > sort_timesteps:
         compare = 'Better'
     elif timesteps == sort_timesteps:
@@ -290,6 +294,8 @@ if __name__ == '__main__':
                         help='network dimension, default is 4')
     parser.add_argument('--kary', default=2, type=int,
                         help='generay kary tree, default is 2 (binary)')
+    parser.add_argument('--radix', default=4, type=int,
+                        help='node radix, default is 4')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
 

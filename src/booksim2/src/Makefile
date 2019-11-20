@@ -26,7 +26,7 @@
 
 LEX = flex
 YACC   = bison -y
-DEFINE = -DTEST_SCALE_TRAFFICMANAGER
+#DEFINE = -DTEST_SCALE_TRAFFICMANAGER
 INCPATH = -I. -Iarbiters -Iallocators -Irouters -Inetworks -Ipower -Idsent
 CPPFLAGS += -Wall $(DEFINE)
 #CPPFLAGS += -O3
@@ -101,6 +101,11 @@ all: CPPFLAGS += -O3 -g
 all: CFLAGS += -O3 -g
 all: $(LIB_UTIL) $(PROG)
 
+# debug
+dbg: CPPFLAGS += -O0 -g
+dbg: CFLAGS += -O0 -g
+dbg: $(LIB_UTIL) $(PROG)
+
 # dynamic library debug mode
 libdbg: DEFINE += -DLIB_BOOKSIM
 libdbg: CPPFLAGS += -O0 -g -fPIC
@@ -155,19 +160,19 @@ ${OBJDIR}/%.o: %.cpp | $$(@D)
 	$(CXX) $(CPPFLAGS) $(INCPATH) $(PYBIND11_INC) -MMD -c $< -o $@
 
 # rules to compile networks
-${OBJDIR}/%.o: networks/%.cpp 
+${OBJDIR}/%.o: networks/%.cpp
 	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile arbiters
-${OBJDIR}/%.o: arbiters/%.cpp 
+${OBJDIR}/%.o: arbiters/%.cpp
 	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile allocators
-${OBJDIR}/%.o: allocators/%.cpp 
+${OBJDIR}/%.o: allocators/%.cpp
 	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile routers
-${OBJDIR}/%.o: routers/%.cpp 
+${OBJDIR}/%.o: routers/%.cpp
 	$(CXX) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 # rules to compile power classes

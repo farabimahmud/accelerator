@@ -9,8 +9,8 @@ from allreduce import Allreduce
 
 
 class MXNetTreeAllreduce(Allreduce):
-    def __init__(self, network):
-        super().__init__(network)
+    def __init__(self, args, network):
+        super().__init__(args, network)
         self.alpha = 0.7    # link usage penalty
         self.backtrack = False   # whether or not to use backtracking to generate trees
         self.topology = None   # topology stores the generated (maybe) link-conflict trees
@@ -1453,9 +1453,11 @@ class MXNetTreeAllreduce(Allreduce):
         trees = deepcopy(self.conflict_trees)
 
         for node in range(self.network.nodes):
-            self.reduce_scatter_schedule[node] = [{node: (None, self.trees_children[node][node])}]
+            self.reduce_scatter_schedule[node] = [{node: ((None, None), self.trees_children[node][node])}]
             self.all_gather_schedule[node] = [{}]
 
+        reduce_scatter_ni = np.zeros(self.network.nodes, dtype=int)
+        all_gather_ni = np.zeros(self.network.nodes, dtype=int)
         change = True
         while change:
             change = False
@@ -1465,10 +1467,12 @@ class MXNetTreeAllreduce(Allreduce):
                     child_parent_row = trees[root].pop()
                     for child, parent in child_parent_row:
                         # TODO: It seems dict is ordered by key in python implementation, may optimize later
-                        self.reduce_scatter_schedule[child][0][root] = (parent, self.trees_children[root][child])
+                        self.reduce_scatter_schedule[child][0][root] = ((parent, reduce_scatter_ni[parent]), self.trees_children[root][child])
+                        reduce_scatter_ni[parent] = (reduce_scatter_ni[parent] + 1) % self.args.radix
                         if root not in self.all_gather_schedule[parent][0].keys():
                             self.all_gather_schedule[parent][0][root] = ([], self.trees_parent[root][parent])
-                        self.all_gather_schedule[parent][0][root][0].append(child)
+                        self.all_gather_schedule[parent][0][root][0].append((child, all_gather_ni[child]))
+                        all_gather_ni[child] = (all_gather_ni[child] + 1) % self.args.radix
                         change = True
 
         if verbose:
@@ -1485,12 +1489,11 @@ class MXNetTreeAllreduce(Allreduce):
 
 def test(args):
     dimension = args.dimension
-    nodes = dimension * dimension
-    network = networks.Torus(nodes, dimension)
+    network = networks.Torus(args)
     network.build_graph()
 
     kary = args.kary
-    allreduce = MXNetTreeAllreduce(network)
+    allreduce = MXNetTreeAllreduce(args, network)
     allreduce.backtrack = args.backtrack
     begin_seed = 100
     end_seed = 101
@@ -1523,6 +1526,7 @@ def test(args):
             allreduce.generate_trees_dotfile('mxnettree_sort.dot')
         sort_timesteps = allreduce.timesteps
         allreduce.generate_schedule()
+        allreduce.max_num_concurrent_flows()
         if timesteps > sort_timesteps:
             compare = 'Better'
             diff = timesteps - sort_timesteps
@@ -1565,6 +1569,8 @@ if __name__ == '__main__':
                         help='network dimension, default is 4')
     parser.add_argument('--kary', default=2, type=int,
                         help='generay kary tree, default is 2 (binary)')
+    parser.add_argument('--radix', default=4, type=int,
+                        help='node radix, default is 4')
     parser.add_argument('--backtrack', default=False, action='store_true',
                         help='use backtracking only, default is False')
     parser.add_argument('--gendotfile', default=False, action='store_true',
