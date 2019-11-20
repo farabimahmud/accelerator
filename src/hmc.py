@@ -219,7 +219,7 @@ class HMC(SimObject):
                 send_flow = None
                 parent = None
                 dest_ni = None
-                if len(self.all_gather_schedule) > 0:
+                if len(self.reduce_scatter_schedule) > 0:
                     for flow, schedule in self.reduce_scatter_schedule[0].items():
                         depending_children = schedule[1]
                         if len(depending_children) == 0:
@@ -337,7 +337,7 @@ class HMC(SimObject):
                     self.free_nis.add(ni)
                     if len(self.all_gather_schedule) > 0:
                         self.schedule('all-gather', cur_cycle + 1)
-                    else:
+                    elif len(self.free_nis) == self.args.radix:
                         self.communication_state = 'idle'
                         logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
             events.remove('send-gather-message')

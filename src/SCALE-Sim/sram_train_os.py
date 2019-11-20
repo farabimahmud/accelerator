@@ -162,7 +162,7 @@ def gen_filter_gradient_read_trace(
 
     # This initialization assumes num_rows << filter_size
     # This assignment logic needs to modified if that is not the case
-    assert dim_rows < filter_size # TODO: need to change to fit other cases, a lot
+    #assert dim_rows < filter_size # TODO: need to change to fit other cases, a lot
     for r in range(dim_rows):
         # Calculate base_addr of ifmap for a particular filter element
         base_row_col_id = math.floor(r / num_channels)
