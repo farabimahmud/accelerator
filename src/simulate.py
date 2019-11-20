@@ -61,19 +61,28 @@ def init():
                         help='allreduce shedule (multitree or mxnettree or ring), default=multitree')
     parser.add_argument('-k', '--kary', default=2, type=int,
                         help='generay kary allreduce trees, default is 2 (binary)')
+    parser.add_argument('--radix', default=4, type=int,
+                        help='node radix connected to router (end node NIs), default is 4')
     parser.add_argument('--booksim-config', default='', required=True,
                         help='required config file for booksim')
     parser.add_argument('-l', '--enable-logger', default=[], action='append',
                         help='Enable logging for a specific module, append module name')
     parser.add_argument('-v', '--verbose', default=False, action='store_true',
                         help='Set the log level to debug, printing out detailed messages during execution.')
+    parser.add_argument('--only-allreduce', default=False, action='store_true',
+                        help='Set the flag to only run allreduce communication')
 
     args = parser.parse_args()
 
+    logfile = 'logs/{}_{}.log'.format(args.run_name, args.allreduce)
     if args.verbose:
-        logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+        logging.basicConfig(filename=logfile, format='%(message)s', level=logging.DEBUG)
     else:
-        logging.basicConfig(format='%(message)s', level=logging.INFO)
+        logging.basicConfig(filename=logfile, format='%(message)s', level=logging.INFO)
+
+    for scope in args.enable_logger:
+        logger = logging.getLogger(scope)
+        logger.setLevel(logging.DEBUG)
 
     config = cp.ConfigParser()
     config.read(args.arch_config)
@@ -131,7 +140,7 @@ def init():
     global_eventq = EventQueue()
 
     model = Model(args)
-    logger.info('NN model size: {} hyperparameters\n'.format(model.size))
+    logger.info('NN model size: {} parameters\n'.format(model.size))
 
     network = BookSim(args, global_eventq)
 
@@ -146,10 +155,13 @@ def init():
         hmcs[i].load_model(model)
         hmcs[i].startup()
         # connect with network
-        from_network_message_buffers.append(MessageBuffer())
-        to_network_message_buffers.append(MessageBuffer())
-        from_network_message_buffers[i].set_consumer(hmcs[i])
-        to_network_message_buffers[i].set_consumer(network)
+        from_network_message_buffers.append([])
+        to_network_message_buffers.append([])
+        for j in range(args.radix):
+            from_network_message_buffers[i].append(MessageBuffer('from_network_node{}_ni{}'.format(i, j)))
+            to_network_message_buffers[i].append(MessageBuffer('to_network_node{}_ni{}'.format(i, j)))
+            from_network_message_buffers[i][j].set_consumer(hmcs[i])
+            to_network_message_buffers[i][j].set_consumer(network)
         hmcs[i].set_message_buffers(from_network_message_buffers[i],
                 to_network_message_buffers[i])
         hmcs[i].set_allreduce(allreduce)

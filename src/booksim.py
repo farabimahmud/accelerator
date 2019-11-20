@@ -47,24 +47,34 @@ class BookSim(SimObject):
     def process(self, cur_cycle):
         # send messages
         for i in range(self.args.num_hmcs):
-            message = self.in_message_buffers[i].peek(cur_cycle)
-            if message:
-                assert message.src == i
-                self.booksim.IssueMessage(message.flow, i, message.dest, -1, message.type)
-                self.in_message_buffers[i].dequeue(cur_cycle)
-                #print('{} | {} | issues a {} message for flow {} from HMC-{} to HMC-{}'.format(cur_cycle, self.name, message.type, message.flow, i, message.dest))
+            for j in range(self.args.radix):
+                message = self.in_message_buffers[i][j].peek(cur_cycle)
+                if message != None:
+                    src = message.src // self.args.radix
+                    src_ni = message.src % self.args.radix
+                    dest = message.dest // self.args.radix
+                    dest_ni = message.dest % self.args.radix
+                    assert src == i
+                    assert src_ni == j
+                    self.booksim.IssueMessage(message.flow, message.src, message.dest, -1, message.type)
+                    self.in_message_buffers[i][j].dequeue(cur_cycle)
+                    #print('{} | {} | issues a {} message for flow {} from HMC-{} (NI {}) to HMC-{} (NI {})'.format(cur_cycle, self.name, message.type, message.flow, src, src_ni, dest, dest_ni))
 
         self.booksim.SetSimTime(cur_cycle)
         self.booksim.WakeUp()
 
         # peek and receive messages
         for i in range(self.args.num_hmcs):
-            flow, src, msgtype = self.booksim.PeekMessage(i, 0)
-            if src != -1:
-                assert flow != -1
-                message = Message(flow, src, i, 64, msgtype)
-                self.out_message_buffers[i].enqueue(message, cur_cycle, 1)
-                #print('{} | {} | peek a {} message for flow {} to HMC-{} from HMC-{}'.format(cur_cycle, self.name, msgtype, flow, i, src))
+            for j in range(self.args.radix):
+                dest_node = i * self.args.radix + j
+                flow, src_node, msgtype = self.booksim.PeekMessage(dest_node, 0)
+                if src_node != -1:
+                    assert flow != -1
+                    src = src_node // self.args.radix
+                    src_ni = src_node % self.args.radix
+                    message = Message(flow, src_node, dest_node, 64, msgtype)
+                    self.out_message_buffers[i][j].enqueue(message, cur_cycle, 1)
+                    #print('{} | {} | peek a {} message for flow {} to HMC-{} (NI {}) from HMC-{} (NI {})'.format(cur_cycle, self.name, msgtype, flow, i, j, src, src_ni))
 
         if not self.booksim.Idle():
             self.schedule(self, cur_cycle + 1)

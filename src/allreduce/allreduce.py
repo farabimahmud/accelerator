@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 
 
 class Allreduce(ABC):
-    def __init__(self, network):
+    def __init__(self, args, network):
+        self.args = args
         self.network = network
         self.trees = None
         self.trees_parent = None
@@ -14,21 +15,21 @@ class Allreduce(ABC):
         schedules are organized as list of list, the list with lower index
         in the schedule should be scheduled earlier.
         - reduce_scatter_schedule:
-            subflow: (parent, [dependent children]) // subflow is 'tree' root
+            subflow: ((parent, dest_ni), [dependent children]) // subflow is 'tree' root
         - all_gather_schedule:
-            subflow: ([children], dependent parent)
+            subflow: ([(child1, dest_ni1), ..., (child_n, dest_ni_n)], dependent parent)
         Ring:
             0->1->2->3->0
             reduce_scatter_schedule[0] = [
-                {3: (1, [])},
-                {2: (1, [3])},
-                {1: (1, [3])},
-                {0: (None, [3])}
+                {3: ((1, 0), [])},
+                {2: ((1, 0), [3])},
+                {1: ((1, 0), [3])},
+                {0: ((None, None), [3])} # indicate finish this reduce-scatter
             ]
             all_gather_schedule[0] = [
-                {0: ([1], None)},
-                {3: ([1], 3)},
-                {2: ([1], 3)}
+                {0: ([(1, 0)], None)},
+                {3: ([(1, 0)], 3)},
+                {2: ([(1, 0)], 3)}
             ]
         MXNet: (only dependencies among children and parent)
               Tree 0      Tree 1        Tree 2        Tree 3
@@ -36,24 +37,24 @@ class Allreduce(ABC):
               0   1       1   3         2   3         3   1
             0  2 1  3   1  0 3  2     2  0 3  1     3  2 1  0
             reduce_scatter_schedule[3] = [
-                {0: (1, []), 1: (1, [2]), 2: (2, [1]), 3: (None, [2, 1])}
+                {0: ((1, 0), []), 1: ((1, 3), [2]), 2: ((2, 1), [1]), 3: ((None, None), [1, 2])}
             ]
             all_gather_schedule[3] = [
-                {1: ([2], 1), 2: ([1], 2), 3: ([1, 2], None)}
+                {1: ([(2, 1)], 1), 2: ([(1, 0)], 2), 3: ([(2, 2), (1, 2)], None)}
             ]
         MultiTree:
             Timestep    Tree 0      Tree 1        Tree 2        Tree 3
                 2         0           1             2             3
-                1          2           3             0             1
-                0       1   3       0   2         3   1         2   0
+                1        1 2         0 3           3 0           2 1
+                0           3           2             1             0
             reduce_scatter_schedule[0] = [
-                {1: (1, []), 3: (1, [])},
-                {2: (2, [1])},
-                {0: (None, [1, 2])}
+                {3: ((1, 0), [])}                   # step 1
+                {1: ((1, 1), []), 2: ((2, 0), [1])} # step 2
+                {0: ((None, None), [2, 1])}
             ]
             all_gather_schedule[0] = [
-                {0: ([2], None)},
-                {0: ([1], None), 2: ([1], 2)}
+                {0: ([(2, 0), (1, 0)], None)}       # step 1
+                {2: ([(1, 0)], 2)}                  # step 2
             ]
         '''
         self.reduce_scatter_schedule = None
@@ -285,15 +286,17 @@ return: an allreduce object
 def construct_allreduce(args):
     dimension = int(math.sqrt(args.num_hmcs))
     assert args.num_hmcs == dimension * dimension
-    network = networks.Torus(args.num_hmcs, dimension)
+    args.nodes = args.num_hmcs
+    args.dimension = dimension
+    network = networks.Torus(args)
     network.build_graph()
 
     if args.allreduce == 'multitree':
-        allreduce = MultiTreeAllreduce(network)
+        allreduce = MultiTreeAllreduce(args, network)
     elif args.allreduce == 'mxnettree':
-        allreduce = MXNetTreeAllreduce(network)
+        allreduce = MXNetTreeAllreduce(args, network)
     elif args.allreduce == 'ring':
-        allreduce = RingAllreduce(network)
+        allreduce = RingAllreduce(args, network)
     else:
         raise RuntimeError('Unknow allreduce schedule: ' + args.allreduce)
 
