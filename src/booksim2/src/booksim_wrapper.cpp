@@ -3,7 +3,6 @@
 #include "routefunc.hpp"
 #include "random_utils.hpp"
 #include "power_module.hpp"
-#include "dsent_power.hpp"
 
 BookSim::BookSim(string const & configfile)
 {
@@ -44,6 +43,12 @@ BookSim::BookSim(string const & configfile)
   _outstanding_messages = 0;
   _print_messages = gWatchOut && (_config->GetInt("watch_all_packets") > 0);
 
+  _power_model = nullptr;
+  if (_config->GetInt("sim_power") > 0 &&
+      _config->GetInt("dsent_power") > 0) {
+    _power_model = new DSENTPower(_net[0], *_config);
+  }
+
 #ifdef LIB_BOOKSIM
   trafficManager = _traffic_manager;
 #endif
@@ -52,8 +57,8 @@ BookSim::BookSim(string const & configfile)
 BookSim::~BookSim() {
   if (_config->GetInt("sim_power") > 0) {
     if (_config->GetInt("dsent_power") > 0) {
-      DSENTPower pnet(_net[0], *_config);
-      pnet.Run();
+      assert(_power_model != nullptr);
+      _power_model->Run();
     } else {
       Power_Module pnet(_net[0], *_config);
       pnet.run();
@@ -63,6 +68,7 @@ BookSim::~BookSim() {
   delete _net[0];
   delete _config;
   delete _traffic_manager;
+  if (_power_model) delete _power_model;
 }
 
 int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type)
@@ -142,5 +148,131 @@ bool BookSim::RunTest()
   _traffic_manager->DisplayStats();
 
   return (_outstanding_messages == 0);
+}
+
+void BookSim::CalculatePower()
+{
+  if (_power_model)
+    _power_model->CalculatePower();
+}
+
+double BookSim::GetNetDynPower()
+{
+  if (_power_model)
+    return _power_model->GetNetDynPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetNetLeakPower()
+{
+  if (_power_model)
+    return _power_model->GetNetLeakPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetNetDynPowerWoClk()
+{
+  if (_power_model)
+    return _power_model->GetNetDynPowerWoClk();
+  else
+    return 0.0;
+}
+
+double BookSim::GetRouterDynPower()
+{
+  if (_power_model)
+    return _power_model->GetRouterDynPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetRouterLeakPower()
+{
+  if (_power_model)
+    return _power_model->GetRouterLeakPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetBufferDynPower()
+{
+  if (_power_model)
+    return _power_model->GetBufferDynPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetBufferLeakPower()
+{
+  if (_power_model)
+    return _power_model->GetBufferLeakPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetXbarDynPower()
+{
+  if (_power_model)
+    return _power_model->GetXbarDynPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetXbarLeakPower()
+{
+  if (_power_model)
+    return _power_model->GetXbarLeakPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetSWAllocDynPower()
+{
+  if (_power_model)
+    return _power_model->GetSWAllocDynPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetSWAllocLeakPower()
+{
+  if (_power_model)
+    return _power_model->GetSWAllocLeakPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetClkDynPower()
+{
+  if (_power_model)
+    return _power_model->GetClkDynPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetClkLeakPower()
+{
+  if (_power_model)
+    return _power_model->GetClkLeakPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetLinkDynPower()
+{
+  if (_power_model)
+    return _power_model->GetLinkDynPower();
+  else
+    return 0.0;
+}
+
+double BookSim::GetLinkLeakPower()
+{
+  if (_power_model)
+    return _power_model->GetLinkLeakPower();
+  else
+    return 0.0;
 }
 

@@ -100,7 +100,7 @@ void DSENTPower::calcRouterPower()
 
     // crossbar
     _xbar_dyn_power += dsent->queryResult("xbar_o_dynamic") * (sw_acts/_total_time);
-   
+
     // clock dynamic power
     _clk_dyn_power += dsent->queryResult("clock_o_dynamic");
 
@@ -155,7 +155,7 @@ void DSENTPower::calcLinkPower()
 
 }
 
-void DSENTPower::Run()
+void DSENTPower::CalculatePower()
 {
   _total_time = GetSimTime();
 
@@ -166,6 +166,11 @@ void DSENTPower::Run()
   _net_dyn_power = _router_dyn_power + _link_dyn_power;
   _net_leak_power = _router_leak_power + _link_leak_power;
   _net_power = _net_dyn_power + _net_leak_power;
+}
+
+void DSENTPower::Run()
+{
+  CalculatePower();
 
   cout << "====== DSENT Power Summary ======" << endl;
   cout << "----- Complete time -----" << endl;

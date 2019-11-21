@@ -58,10 +58,23 @@ public:
   ~DSENTPower();
 
   void Run();
-  double GetNetworkPower() const { return _net_power; }
-  double GetNetDynPower() const { return _net_dyn_power; }
-  double GetNetLeakPower() const { return _net_leak_power; }
-  double GetNetDynPowerWoClk() const { return _net_dyn_power - _clk_dyn_power; }
+  void CalculatePower();
+  inline double GetNetworkPower() const { return _net_power; }
+  inline double GetNetDynPower() const { return _net_dyn_power; }
+  inline double GetNetLeakPower() const { return _net_leak_power; }
+  inline double GetNetDynPowerWoClk() const { return _net_dyn_power - _clk_dyn_power; }
+  inline double GetRouterDynPower() const { return _router_dyn_power; }
+  inline double GetRouterLeakPower() const { return _router_leak_power; }
+  inline double GetBufferDynPower() const { return _buf_wr_dyn_power + _buf_rd_dyn_power; }
+  inline double GetBufferLeakPower() const { return _buf_leak_power; }
+  inline double GetXbarDynPower() const { return _xbar_dyn_power; }
+  inline double GetXbarLeakPower() const { return _xbar_leak_power; }
+  inline double GetSWAllocDynPower() const { return _sw_arb_local_dyn_power + _sw_arb_global_dyn_power; }
+  inline double GetSWAllocLeakPower() const { return _sw_arb_leak_power; }
+  inline double GetClkDynPower() const { return _clk_dyn_power; }
+  inline double GetClkLeakPower() const { return _clk_leak_power; }
+  inline double GetLinkDynPower() const { return _link_dyn_power; }
+  inline double GetLinkLeakPower() const { return _link_leak_power; }
 
 };
 

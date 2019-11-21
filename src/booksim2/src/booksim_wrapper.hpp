@@ -6,6 +6,7 @@
 #include "booksim_config.hpp"
 #include "network.hpp"
 #include "scaletrafficmanager.hpp"
+#include "dsent_power.hpp"
 
 #include <string>
 
@@ -18,6 +19,22 @@ public:
   int IssueMessage(int flow, int src, int dest, int id, int msg_size, Message::MessageType type); // msg_size: bytes
   tuple<int, int, Message::MessageType> PeekMessage(int node, int vnet);
   void DequeueMessage(int node, int vnet);
+  void CalculatePower();
+  double GetNetDynPower();
+  double GetNetLeakPower();
+  double GetNetDynPowerWoClk();
+  double GetRouterDynPower();
+  double GetRouterLeakPower();
+  double GetBufferDynPower();
+  double GetBufferLeakPower();
+  double GetXbarDynPower();
+  double GetXbarLeakPower();
+  double GetSWAllocDynPower();
+  double GetSWAllocLeakPower();
+  double GetClkDynPower();
+  double GetClkLeakPower();
+  double GetLinkDynPower();
+  double GetLinkLeakPower();
 
   bool RunTest();
   inline bool Idle() { return _traffic_manager->Idle() && _outstanding_messages == 0; }
@@ -33,6 +50,7 @@ private:
   ScaleTrafficManager *_traffic_manager;
   BookSimConfig *_config;
   vector<Network *> _net;
+  DSENTPower *_power_model;
 
   int _cur_mid;
   int _outstanding_messages;
