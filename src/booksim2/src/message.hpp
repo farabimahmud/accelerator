@@ -23,6 +23,7 @@ public:
   };
 
   MessageType type;
+  int size; // bytes
 
   int vnet;
 
@@ -33,10 +34,10 @@ public:
   int dest;
 
   void Reset();
-  void Set(MessageType type_, int id_, int flow_, int src_, int dest_);
+  void Set(MessageType type_, int id_, int flow_, int src_, int dest_, int size);
 
   static Message *New();
-  static Message *New(MessageType type, int id, int flow, int src, int dest);
+  static Message *New(MessageType type, int id, int flow, int src, int dest, int size);
   static string MessageTypeToString(const MessageType &type);
   static int GetVirtualNetwork(const MessageType &type);
   static int GetMessageSize(const MessageType &type);

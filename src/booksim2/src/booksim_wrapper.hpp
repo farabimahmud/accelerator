@@ -15,7 +15,7 @@ public:
   BookSim(string const & configfile);
   ~BookSim();
 
-  int IssueMessage(int flow, int src, int dest, int id, Message::MessageType type);
+  int IssueMessage(int flow, int src, int dest, int id, int msg_size, Message::MessageType type); // msg_size: bytes
   tuple<int, int, Message::MessageType> PeekMessage(int node, int vnet);
   void DequeueMessage(int node, int vnet);
 
@@ -27,7 +27,7 @@ public:
   inline int GetMessageBufferSize() { return _config->GetInt("msg_buf_size"); }
   inline int GetInjectBufferSize() { return _config->GetInt("inject_buf_size"); }
 
-  inline static void RegisterGlobalBookSim(BookSim *booksim) {gBookSim = booksim;}
+  inline void RegisterGlobalTrafficManager() {trafficManager = _traffic_manager;}
 
 private:
   ScaleTrafficManager *_traffic_manager;

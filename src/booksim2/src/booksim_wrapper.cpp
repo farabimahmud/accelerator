@@ -45,7 +45,7 @@ BookSim::BookSim(string const & configfile)
   _print_messages = gWatchOut && (_config->GetInt("watch_all_packets") > 0);
 
 #ifdef LIB_BOOKSIM
-  gBookSim = this;
+  trafficManager = _traffic_manager;
 #endif
 }
 
@@ -65,13 +65,13 @@ BookSim::~BookSim() {
   delete _traffic_manager;
 }
 
-int BookSim::IssueMessage(int flow, int src, int dest, int id,  Message::MessageType type)
+int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type)
 {
   if (id == -1) {
     id = _cur_mid;
   }
 
-  Message *message = Message::New(type, id, flow, src, dest);
+  Message *message = Message::New(type, id, flow, src, dest, msg_size);
   if (_traffic_manager->Enqueue(message)) {
     _outstanding_messages++;
     _cur_mid++;
@@ -124,7 +124,7 @@ bool BookSim::RunTest()
   for (int src = 0; src < gNodes; src++) {
     for (int dest = 0; dest < gNodes; dest++) {
       Message::MessageType type = (Message::MessageType) RandomInt(Message::MessageType_NUM - 1);
-      IssueMessage(8, src, dest, -1, type);
+      IssueMessage(8, src, dest, -1, 64, type);
     }
   }
 
