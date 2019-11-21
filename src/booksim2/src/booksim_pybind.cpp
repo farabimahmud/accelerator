@@ -19,7 +19,24 @@ PYBIND11_MODULE(pybooksim, m) {
     .def("GetMessageBufferSize", &BookSim::GetMessageBufferSize)
     .def("GetInjectBufferSize", &BookSim::GetInjectBufferSize)
     .def("Idle", &BookSim::Idle)
-    .def("WakeUp", &BookSim::WakeUp);
+    .def("WakeUp", &BookSim::WakeUp)
+    .def("CalculatePower", &BookSim::CalculatePower)
+    .def("GetNetDynPower", &BookSim::GetNetDynPower)
+    .def("GetNetLeakPower", &BookSim::GetNetLeakPower)
+    .def("GetNetDynPowerWoClk", &BookSim::GetNetDynPowerWoClk)
+    .def("GetRouterDynPower", &BookSim::GetRouterDynPower)
+    .def("GetRouterLeakPower", &BookSim::GetRouterLeakPower)
+    .def("GetBufferDynPower", &BookSim::GetBufferDynPower)
+    .def("GetBufferLeakPower", &BookSim::GetBufferLeakPower)
+    .def("GetXbarDynPower", &BookSim::GetXbarDynPower)
+    .def("GetXbarLeakPower", &BookSim::GetXbarLeakPower)
+    .def("GetSWAllocDynPower", &BookSim::GetSWAllocDynPower)
+    .def("GetSWAllocLeakPower", &BookSim::GetSWAllocLeakPower)
+    .def("GetClkDynPower", &BookSim::GetClkDynPower)
+    .def("GetClkLeakPower", &BookSim::GetClkLeakPower)
+    .def("GetLinkDynPower", &BookSim::GetLinkDynPower)
+    .def("GetLinkLeakPower", &BookSim::GetLinkLeakPower)
+    ;
 
   py::class_<Message, std::unique_ptr<Message, py::nodelete>> message(m, "Message");
 

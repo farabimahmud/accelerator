@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import math
 import logging
+import json
 
 sys.path.append('SCALE-Sim')
 sys.path.append('booksim2/src')
@@ -243,6 +244,45 @@ def main():
 
     if args.dump:
         cleanup(args)
+
+    # dump configuration and results
+    sim = {}
+    sim['configuration'] = vars(args)
+    sim['results'] = {}
+
+    sim['results']['performance'] = {}
+    sim['results']['performance']['training'] = compute_cycles
+    sim['results']['performance']['allreduce'] = {}
+    sim['results']['performance']['allreduce']['computation'] = allreduce_compute_cycles
+    sim['results']['performance']['allreduce']['communication'] = pure_communication_cycles
+    sim['results']['performance']['allreduce']['total'] = allreduce_cycles
+    sim['results']['performance']['total'] = cycles
+
+    network.booksim.CalculatePower()
+    net_dyn_power = network.booksim.GetNetDynPower()
+    net_leak_power = network.booksim.GetNetLeakPower()
+    router_dyn_power = network.booksim.GetRouterDynPower()
+    router_leak_power = network.booksim.GetRouterLeakPower()
+    link_dyn_power = network.booksim.GetLinkDynPower()
+    link_leak_power = network.booksim.GetLinkLeakPower()
+    sim['results']['power'] = {}
+    sim['results']['power']['network'] = {}
+    sim['results']['power']['network']['dynamic'] = net_dyn_power
+    sim['results']['power']['network']['static'] = net_leak_power
+    sim['results']['power']['network']['total'] = net_dyn_power + net_leak_power
+    sim['results']['power']['network']['router'] = {}
+    sim['results']['power']['network']['router']['dynamic'] = router_dyn_power
+    sim['results']['power']['network']['router']['static'] = router_leak_power
+    sim['results']['power']['network']['router']['total'] = router_dyn_power + router_leak_power
+    sim['results']['power']['network']['link'] = {}
+    sim['results']['power']['network']['link']['dynamic'] = link_dyn_power
+    sim['results']['power']['network']['link']['static'] = link_leak_power
+    sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
+
+    jsonpath = 'logs/{}_{}.json'.format(args.run_name, args.allreduce)
+    with open(jsonpath, 'w') as simfile:
+        json.dump(sim, simfile, indent=4)
+        simfile.close()
 
 
 if __name__ == '__main__':
