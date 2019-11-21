@@ -138,6 +138,7 @@ void Message::Free()
 
 void Message::FreeAll()
 {
+  assert(_free.size() == _all.size());
   while (!_all.empty()) {
     delete _all.top();
     _all.pop();

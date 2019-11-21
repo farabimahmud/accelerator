@@ -13,8 +13,11 @@ PYBIND11_MODULE(pybooksim, m) {
     .def(py::init<const std::string&>())
     .def("IssueMessage", &BookSim::IssueMessage)
     .def("PeekMessage", &BookSim::PeekMessage)
+    .def("DequeueMessage", &BookSim::DequeueMessage)
     .def("SetSimTime", &BookSim::SetSimTime)
     .def("GetSimTime", &BookSim::GetSimTime)
+    .def("GetMessageBufferSize", &BookSim::GetMessageBufferSize)
+    .def("GetInjectBufferSize", &BookSim::GetInjectBufferSize)
     .def("Idle", &BookSim::Idle)
     .def("WakeUp", &BookSim::WakeUp);
 

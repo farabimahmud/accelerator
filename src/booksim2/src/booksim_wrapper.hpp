@@ -17,12 +17,15 @@ public:
 
   int IssueMessage(int flow, int src, int dest, int id, Message::MessageType type);
   tuple<int, int, Message::MessageType> PeekMessage(int node, int vnet);
+  void DequeueMessage(int node, int vnet);
 
   bool RunTest();
   inline bool Idle() { return _traffic_manager->Idle() && _outstanding_messages == 0; }
   inline void WakeUp() { _traffic_manager->WakeUp(); }
   inline void SetSimTime(int time) { _traffic_manager->setTime(time); }
   inline int GetSimTime() { return _traffic_manager->getTime(); }
+  inline int GetMessageBufferSize() { return _config->GetInt("msg_buf_size"); }
+  inline int GetInjectBufferSize() { return _config->GetInt("inject_buf_size"); }
 
   inline static void RegisterGlobalBookSim(BookSim *booksim) {gBookSim = booksim;}
 

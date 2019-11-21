@@ -42,7 +42,7 @@ class HMC(SimObject):
         self.bytes_per_param = 4 # bytes
         self.mini_batch_per_npu = math.ceil(self.args.mini_batch_size / self.args.num_vaults)
 
-        self.message_size = 64 # bytes
+        self.message_size = args.message_size # bytes
         self.num_messages = None
 
         # for the schedule semantics, refer to allreduce/allreduce.py
@@ -257,6 +257,9 @@ class HMC(SimObject):
             for ni, sending in enumerate(self.sending):
                 if sending == None:
                     continue
+                if self.to_network_message_buffers[ni].is_full():
+                    self.schedule('send-reduce-message', cur_cycle + 1)
+                    continue
                 flow = sending[0]
                 dest = sending[1]
                 dest_ni = sending[2]
@@ -319,6 +322,9 @@ class HMC(SimObject):
             assert self.communication_state == 'all-gather'
             for ni, sending in enumerate(self.sending):
                 if sending == None:
+                    continue
+                if self.to_network_message_buffers[ni].is_full():
+                    self.schedule('send-gather-message', cur_cycle + 1)
                     continue
                 flow = sending[0]
                 dest = sending[1]
