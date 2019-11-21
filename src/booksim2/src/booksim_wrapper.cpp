@@ -1,3 +1,4 @@
+#include <fstream>
 #include "booksim_wrapper.hpp"
 #include "routefunc.hpp"
 #include "random_utils.hpp"
@@ -8,6 +9,14 @@ BookSim::BookSim(string const & configfile)
 {
   _config = new BookSimConfig();
   _config->ParseFile(configfile);
+  ifstream in(configfile);
+  cout << endl << "Begin BookSim Configuration File: " << configfile << endl;
+  while (!in.eof()) {
+    char c;
+    in.get(c);
+    cout << c;
+  }
+  cout << "End BookSim Configuration File: " << configfile << endl;
 
   // initialize routing and global variables
   InitializeRoutingMap(*_config);
@@ -36,7 +45,7 @@ BookSim::BookSim(string const & configfile)
   _print_messages = gWatchOut && (_config->GetInt("watch_all_packets") > 0);
 
 #ifdef LIB_BOOKSIM
-  gBookSim = this;
+  trafficManager = _traffic_manager;
 #endif
 }
 
@@ -56,13 +65,13 @@ BookSim::~BookSim() {
   delete _traffic_manager;
 }
 
-int BookSim::IssueMessage(int flow, int src, int dest, int id,  Message::MessageType type)
+int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type)
 {
   if (id == -1) {
     id = _cur_mid;
   }
 
-  Message *message = Message::New(type, id, flow, src, dest);
+  Message *message = Message::New(type, id, flow, src, dest, msg_size);
   if (_traffic_manager->Enqueue(message)) {
     _outstanding_messages++;
     _cur_mid++;
@@ -86,7 +95,7 @@ tuple<int, int, Message::MessageType> BookSim::PeekMessage(int node, int vnet)
   int src = -1;
   Message::MessageType type = Message::MessageType_NUM;
 
-  Message *message = _traffic_manager->Dequeue(node, vnet);
+  Message *message = _traffic_manager->PeekMessage(node, vnet);
   if (message != nullptr) {
     flow = message->flow;
     src = message->src;
@@ -97,12 +106,15 @@ tuple<int, int, Message::MessageType> BookSim::PeekMessage(int node, int vnet)
         << "Receiving messages:" << endl;
      *gWatchOut << *message;
     }
-
-    message->Free();
-    _outstanding_messages--;
   }
 
   return make_tuple(flow, src, type);
+}
+
+void BookSim::DequeueMessage(int node, int vnet)
+{
+  _traffic_manager->Dequeue(node, vnet);
+  _outstanding_messages--;
 }
 
 bool BookSim::RunTest()
@@ -112,7 +124,7 @@ bool BookSim::RunTest()
   for (int src = 0; src < gNodes; src++) {
     for (int dest = 0; dest < gNodes; dest++) {
       Message::MessageType type = (Message::MessageType) RandomInt(Message::MessageType_NUM - 1);
-      IssueMessage(8, src, dest, -1, type);
+      IssueMessage(8, src, dest, -1, 64, type);
     }
   }
 
@@ -120,7 +132,8 @@ bool BookSim::RunTest()
     _traffic_manager->WakeUp();
     for (int node = 0; node < gNodes; node++) {
       for (int vnet = 0; vnet < 2; vnet++) {
-        PeekMessage(node, vnet);
+        tuple<int, int, Message::MessageType> result = PeekMessage(node, vnet);
+        if (get<1>(result) >= 0) DequeueMessage(node, vnet);
       }
     }
   }

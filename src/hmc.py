@@ -42,7 +42,7 @@ class HMC(SimObject):
         self.bytes_per_param = 4 # bytes
         self.mini_batch_per_npu = math.ceil(self.args.mini_batch_size / self.args.num_vaults)
 
-        self.message_size = 64 # bytes
+        self.message_size = args.message_size # bytes
         self.num_messages = None
 
         # for the schedule semantics, refer to allreduce/allreduce.py
@@ -241,7 +241,7 @@ class HMC(SimObject):
                         if len(self.reduce_scatter_schedule) == 0 and len(self.free_nis) == self.args.radix:
                             self.communication_state = 'all-gather'
                             self.schedule('all-gather', cur_cycle + 1)
-                            logger.info('{} | {} | schedule all-gather'.format(cur_cycle, self.name))
+                            logger.info('{} | {} | start all-gather (start in reduce-scatter)'.format(cur_cycle, self.name))
                         break
                 else:
                     break
@@ -256,6 +256,9 @@ class HMC(SimObject):
             assert self.communication_state == 'reduce-scatter'
             for ni, sending in enumerate(self.sending):
                 if sending == None:
+                    continue
+                if self.to_network_message_buffers[ni].is_full():
+                    self.schedule('send-reduce-message', cur_cycle + 1)
                     continue
                 flow = sending[0]
                 dest = sending[1]
@@ -278,7 +281,7 @@ class HMC(SimObject):
                     elif len(self.free_nis) == self.args.radix:
                         self.communication_state = 'all-gather'
                         self.schedule('all-gather', cur_cycle + 1)
-                        logger.info('{} | {} | schedule all-gather'.format(cur_cycle, self.name))
+                        logger.info('{} | {} | start all-gather (start in send-reduce-message)'.format(cur_cycle, self.name))
                         break
             events.remove('send-reduce-message')
 
@@ -312,13 +315,19 @@ class HMC(SimObject):
             for ni in allocated_nis:
                 self.free_nis.remove(ni)
             if len(allocated_nis) > 0:
+                logger.debug('{} | {} | schedule send-gather-message for next cycle (new flow)'.format(cur_cycle, self.name))
                 self.schedule('send-gather-message', cur_cycle + 1)
             events.remove('all-gather')
 
         if 'send-gather-message' in events:
-            assert self.communication_state == 'all-gather'
+            if len(self.free_nis) < self.args.radix:
+                assert self.communication_state == 'all-gather'
             for ni, sending in enumerate(self.sending):
                 if sending == None:
+                    continue
+                if self.to_network_message_buffers[ni].is_full():
+                    logger.debug('{} | {} | reschedule send-gather-message for next cycle (message buffer full)'.format(cur_cycle, self.name))
+                    self.schedule('send-gather-message', cur_cycle + 1)
                     continue
                 flow = sending[0]
                 dest = sending[1]
@@ -329,17 +338,20 @@ class HMC(SimObject):
                 self.to_network_message_buffers[ni].enqueue(message, cur_cycle, 1)
                 self.messages_sent[ni] += 1
                 #print('{} | {} | sends a gather message to for flow {} (from NI {}) to child HMC-{} (to NI {})'.format(cur_cycle, self.name, flow, ni, dest, dest_ni))
+                #logger.debug('{} | {} | sends a gather message to for flow {} (from NI {}) to child HMC-{} (to NI {})'.format(cur_cycle, self.name, flow, ni, dest, dest_ni))
                 if self.messages_sent[ni] < self.num_messages:
+                    logger.debug('{} | {} | schedule send-gather-message for next cycle (more messages to send)'.format(cur_cycle, self.name))
                     self.schedule('send-gather-message', cur_cycle + 1)
                 else:
                     self.messages_sent[ni] = 0
                     self.sending[ni] = None
                     self.free_nis.add(ni)
-                    if len(self.all_gather_schedule) > 0:
-                        self.schedule('all-gather', cur_cycle + 1)
-                    elif len(self.free_nis) == self.args.radix:
-                        self.communication_state = 'idle'
-                        logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
+            if len(self.all_gather_schedule) > 0 and len(self.free_nis) > 0:
+                self.schedule('all-gather', cur_cycle + 1)
+                logger.debug('{} | {} | schedule all-gather (more schedules to send in send-gather-message)'.format(cur_cycle, self.name))
+            elif len(self.free_nis) == self.args.radix:
+                self.communication_state = 'idle'
+                logger.info('{} | {} | finishes all-gather (after send-gather-message)'.format(cur_cycle, self.name))
             events.remove('send-gather-message')
 
         if 'incoming-message' in events:
@@ -362,6 +374,7 @@ class HMC(SimObject):
                 elif message.type == pybooksim.Message.GatherData:
                     self.messages_received['all-gather'][message.flow] += 1
                     #print('{} | {} | receives a gather messsage for flow {} (at NI {}) from parent HMC-{} (from NI {})'.format(cur_cycle, self.name, message.flow, ni, src, src_ni))
+                    #logger.debug('{} | {} | receives a gather messsage for flow {} (at NI {}) from parent HMC-{} (from NI {})'.format(cur_cycle, self.name, message.flow, ni, src, src_ni))
                     # clear all the dependencies
                     if self.messages_received['all-gather'][message.flow] == self.num_messages:
                         self.messages_received['all-gather'][message.flow] = 0
@@ -374,12 +387,13 @@ class HMC(SimObject):
                                         self.all_gather_schedule[i][message.flow] = (children, None)
                             if self.communication_state == 'all-gather' and len(self.free_nis) > 0:
                                 self.schedule('all-gather', cur_cycle + 1)
+                                logger.debug('{} | {} | schedule all-gather (more schedules to send in incoming-message)'.format(cur_cycle, self.name))
                             #if len(self.free_nis) > 0 and len(self.reduce_scatter_schedule) == 0:
                             #    self.communication_state = 'all-gather'
                             #    self.schedule('all-gather', cur_cycle + 1)
                         else:
                             self.state = 'idle'
-                            logger.info('{} | {} finishes all-gather'.format(cur_cycle, self.name))
+                            logger.info('{} | {} | finishes all-gather (after recieving all-gather)'.format(cur_cycle, self.name))
             events.remove('incoming-message')
 
         if len(events) != 0:

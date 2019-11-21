@@ -6,7 +6,8 @@ stack<Message *> Message::_free;
 ostream& operator<<(ostream &os, const Message &m)
 {
   os << "  Message ID: " << m.id << " (" << &m << ")"
-    << " Type: " << Message::MessageTypeToString(m.type) << endl;
+    << " Type: " << Message::MessageTypeToString(m.type)
+    << " Size: " << m.size << endl;
   os << "  Flow: " << m.flow << " Source: " << m.src << "  Dest: " << m.dest
     << "  vnet: " << m.vnet << endl;
 
@@ -18,7 +19,7 @@ Message::Message()
   Reset();
 }
 
-void Message::Set(MessageType type_, int id_, int flow_, int src_, int dest_)
+void Message::Set(MessageType type_, int id_, int flow_, int src_, int dest_, int size_)
 {
   type = type_;
   vnet = GetVirtualNetwork(type);
@@ -26,6 +27,7 @@ void Message::Set(MessageType type_, int id_, int flow_, int src_, int dest_)
   flow = flow_;
   src = src_;
   dest = dest_;
+  size = size_;
 }
 
 void Message::Reset()
@@ -36,6 +38,7 @@ void Message::Reset()
   flow = -1;
   src = -1;
   dest = -1;
+  size = -1;
 }
 
 
@@ -53,7 +56,7 @@ Message * Message::New() {
   return m;
 }
 
-Message * Message::New(MessageType type, int id, int flow, int src, int dest)
+Message * Message::New(MessageType type, int id, int flow, int src, int dest, int size)
 {
   Message * m;
   if (_free.empty()) {
@@ -63,7 +66,7 @@ Message * Message::New(MessageType type, int id, int flow, int src, int dest)
     m = _free.top();
     _free.pop();
   }
-  m->Set(type, id, flow, src, dest);
+  m->Set(type, id, flow, src, dest, size);
 
   return m;
 }
@@ -138,6 +141,7 @@ void Message::Free()
 
 void Message::FreeAll()
 {
+  assert(_free.size() == _all.size());
   while (!_all.empty()) {
     delete _all.top();
     _all.pop();

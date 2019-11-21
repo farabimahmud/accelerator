@@ -26,7 +26,7 @@
 
 LEX = flex
 YACC   = bison -y
-#DEFINE = -DTEST_SCALE_TRAFFICMANAGER
+DEFINE = -DTEST_SCALE_TRAFFICMANAGER
 INCPATH = -I. -Iarbiters -Iallocators -Irouters -Inetworks -Ipower -Idsent
 CPPFLAGS += -Wall $(DEFINE)
 #CPPFLAGS += -O3

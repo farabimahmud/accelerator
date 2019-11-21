@@ -71,6 +71,10 @@ def init():
                         help='Set the log level to debug, printing out detailed messages during execution.')
     parser.add_argument('--only-allreduce', default=False, action='store_true',
                         help='Set the flag to only run allreduce communication')
+    parser.add_argument('--message-buffer-size', default=0, type=int,
+                        help='message buffer size, default is 0 (infinite)')
+    parser.add_argument('--message-size', default=64, type=int,
+                        help='size of message, default is 64 bytes')
 
     args = parser.parse_args()
 
@@ -143,6 +147,14 @@ def init():
     logger.info('NN model size: {} parameters\n'.format(model.size))
 
     network = BookSim(args, global_eventq)
+    if args.message_buffer_size == 0:
+        inject_buf_size = network.booksim.GetInjectBufferSize()
+        msg_buf_size = network.booksim.GetMessageBufferSize()
+        if inject_buf_size != 0 or msg_buf_size != 0:
+            raise RuntimeError('Message buffer is set to 0 (infinite) here,'
+                    ' but message buffer size and inject buffer size are set'
+                    'to {} and {} in booksim config (should set to 0 for'
+                    ' infinite)'.format(msg_buf_size, inject_buf_size))
 
     allreduce = construct_allreduce(args)
     allreduce.compute_schedule(args.kary)
@@ -158,8 +170,8 @@ def init():
         from_network_message_buffers.append([])
         to_network_message_buffers.append([])
         for j in range(args.radix):
-            from_network_message_buffers[i].append(MessageBuffer('from_network_node{}_ni{}'.format(i, j)))
-            to_network_message_buffers[i].append(MessageBuffer('to_network_node{}_ni{}'.format(i, j)))
+            from_network_message_buffers[i].append(MessageBuffer('from_network_node{}_ni{}'.format(i, j), args.message_buffer_size))
+            to_network_message_buffers[i].append(MessageBuffer('to_network_node{}_ni{}'.format(i, j), args.message_buffer_size))
             from_network_message_buffers[i][j].set_consumer(hmcs[i])
             to_network_message_buffers[i][j].set_consumer(network)
         hmcs[i].set_message_buffers(from_network_message_buffers[i],
@@ -186,6 +198,27 @@ def main():
     args, global_eventq, model, hmcs, network = init()
 
     do_sim_loop(global_eventq)
+
+    assert network.booksim.Idle()
+    logger.debug('booksim network idle? {}'.format(network.booksim.Idle()))
+    for i, hmc in enumerate(hmcs):
+        logger.debug('HMC {}:'.format(i))
+        logger.debug('   reduce-scatter-schedule:')
+        assert len(hmc.reduce_scatter_schedule) == 0
+        for schedule in hmc.reduce_scatter_schedule:
+            logger.debug('       {}'.format(schedule))
+        logger.debug('   all-gather-schedule:')
+        assert len(hmc.all_gather_schedule) == 0
+        for schedule in hmc.all_gather_schedule:
+            logger.debug('       {}'.format(schedule))
+        logger.debug('   from network message buffers:')
+        for i, message_buffer in enumerate(hmc.from_network_message_buffers):
+            assert message_buffer.size == 0
+            logger.debug('       {}-{}: has {} messages'.format(i, message_buffer.name, message_buffer.size))
+        logger.debug('   to network message buffers:')
+        for i, message_buffer in enumerate(hmc.to_network_message_buffers):
+            assert message_buffer.size == 0
+            logger.debug('       {}-{}: has {} messages'.format(i, message_buffer.name, message_buffer.size))
 
     compute_cycles = hmcs[0].compute_cycles
     allreduce_compute_cycles = 0

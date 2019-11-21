@@ -4,13 +4,14 @@
 #include "message.hpp"
 #include "trafficmanager.hpp"
 
-class ScaleTrafficManager : public TrafficManager {  
+class ScaleTrafficManager : public TrafficManager {
 
 protected:
   int _flit_size;
   bool _watch_all_packets;
   int _vnets;
   int _msg_buf_size;
+  int _inject_buf_size;
   vector<int> _last_vnet;
 
 private:
@@ -30,7 +31,8 @@ public:
   ~ScaleTrafficManager();
 
   bool Enqueue(Message *message);
-  Message *Dequeue(int node, int vnet);
+  Message *PeekMessage(int node, int vnet);
+  void Dequeue(int node, int vnet);
 
   inline void WakeUp() { _Step(); }
   inline bool Idle() {return (!Flit::OutStanding() && !Credit::OutStanding());}

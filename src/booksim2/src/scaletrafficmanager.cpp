@@ -9,6 +9,7 @@ ScaleTrafficManager::ScaleTrafficManager(const Configuration &config, const
 {
   _vnets = config.GetInt("vnets");
   _msg_buf_size = config.GetInt("msg_buf_size");
+  _inject_buf_size = config.GetInt("inject_buf_size");
   _last_vnet.resize(_nodes, 0);
   _flit_size = config.GetInt("channel_width");
   _watch_all_packets = (config.GetInt("watch_all_packets") > 0);
@@ -23,7 +24,10 @@ ScaleTrafficManager::ScaleTrafficManager(const Configuration &config, const
   }
 }
 
-ScaleTrafficManager::~ScaleTrafficManager() {}
+ScaleTrafficManager::~ScaleTrafficManager()
+{
+  Message::FreeAll();
+}
 
 void ScaleTrafficManager::_RetireFlit(Flit *f, int dest)
 {
@@ -86,7 +90,7 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
   }
 
   int subnetwork = 0;
-  
+
   if (watch) {
     *gWatchOut << GetSimTime() << " | "
       << "node" << source << " | "
@@ -183,15 +187,20 @@ void ScaleTrafficManager::_Inject()
       if (_input_buffer[input][vnet].empty() == false) {
         Message *message = _input_buffer[input][vnet].front();
         Message::MessageType packet_type = message->type;
-        _GeneratePacket(input, packet_type, vnet, _time);
-        if (_watch_all_packets) {
-          *gWatchOut << GetSimTime() << " | " << FullName()
-            << " | " << "HMC-" << input
-            << " generate new packets for message: " << endl;
-          *gWatchOut << *message;
+        int size = (int) ceil((double) Message::GetMessageSize(packet_type)*8 / _flit_size);
+        assert(_inject_buf_size == 0 || size <= _inject_buf_size);
+        if (_inject_buf_size == 0 ||
+            _partial_packets[input][0].size() + size <= (size_t) _inject_buf_size) {
+          _GeneratePacket(input, packet_type, vnet, _time);
+          if (_watch_all_packets) {
+            *gWatchOut << GetSimTime() << " | " << FullName()
+              << " | " << "HMC-" << input
+              << " generate new packets for message: " << endl;
+            *gWatchOut << *message;
+          }
+          _input_buffer[input][vnet].pop_front();
+          _last_vnet[input] = vnet;
         }
-        _input_buffer[input][vnet].pop_front();
-        _last_vnet[input] = vnet;
       }
     }
   }
@@ -512,7 +521,7 @@ bool ScaleTrafficManager::Enqueue(Message *message)
   int node = message->src;
   int vnet = message->vnet;
 
-  if (_msg_buf_size == -1 ||
+  if (_msg_buf_size == 0 ||
       _input_buffer[node][vnet].size() < (size_t) _msg_buf_size) {
     _input_buffer[node][vnet].push_back(message);
     return true;
@@ -521,15 +530,21 @@ bool ScaleTrafficManager::Enqueue(Message *message)
   }
 }
 
-Message *ScaleTrafficManager::Dequeue(int node, int vnet)
+Message *ScaleTrafficManager::PeekMessage(int node, int vnet)
 {
   Message *message = nullptr;
 
   if (!_output_buffer[node][vnet].empty()) {
     message = _output_buffer[node][vnet].front();
-    _output_buffer[node][vnet].pop_back();
   }
 
   return message;
 }
 
+void ScaleTrafficManager::Dequeue(int node, int vnet)
+{
+  assert(!_output_buffer[node][vnet].empty());
+  Message *message = _output_buffer[node][vnet].front();
+  _output_buffer[node][vnet].pop_front();
+  message->Free();
+}
