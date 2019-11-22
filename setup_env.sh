@@ -11,6 +11,7 @@ if [ "$(dirname -- "$(realpath $BASH_SOURCE)")" != "$PWD" ]; then
   return
 fi
 
+export SIMHOME=$PWD
 export BOOKSIMSRC=$PWD/src/booksim2/src
 
 echo "source successfully!"

@@ -8,9 +8,9 @@ import math
 import logging
 import json
 
-sys.path.append('SCALE-Sim')
-sys.path.append('booksim2/src')
-sys.path.append('allreduce')
+sys.path.append('{}/src/SCALE-Sim'.format(os.environ['SIMHOME']))
+sys.path.append('{}/src/booksim2/src'.format(os.environ['SIMHOME']))
+sys.path.append('{}/src/allreduce'.format(os.environ['SIMHOME']))
 
 from model import Model
 from hmc import HMC
@@ -40,7 +40,7 @@ def init():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--arch-config', default='./SCALE-Sim/configs/express.cfg',
+    parser.add_argument('--arch-config', default='{}/src/SCALE-Sim/configs/express.cfg'.format(os.environ['SIMHOME']),
                         help='accelerator architecture file, '
                              'default=SCALE-Sim/configs/express.cfg')
     parser.add_argument('--num-hmcs', default=16, type=int,
@@ -79,7 +79,16 @@ def init():
 
     args = parser.parse_args()
 
-    logfile = 'logs/{}_{}.log'.format(args.run_name, args.allreduce)
+    if args.outdir:
+        logpath = args.outdir
+    else:
+        logpath = '{}/results/logs'.format(os.environ['SIMHOME'])
+    os.system('mkdir -p {}'.format(logpath))
+    logfile = '{}/{}_{}.log'.format(logpath, args.run_name, args.allreduce)
+    jsonfile = '{}/{}_{}.json'.format(logpath, args.run_name, args.allreduce)
+    if os.path.exists(logfile) or os.path.exists(jsonfile):
+        raise RuntimeError('Warn: {} or {} already existed, may overwritten'.format(logfile, jsonfile))
+
     if args.verbose:
         logging.basicConfig(filename=logfile, format='%(message)s', level=logging.DEBUG)
     else:
@@ -279,7 +288,7 @@ def main():
     sim['results']['power']['network']['link']['static'] = link_leak_power
     sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
 
-    jsonpath = 'logs/{}_{}.json'.format(args.run_name, args.allreduce)
+    jsonpath = '{}/results/logs/{}_{}.json'.format(os.environ['SIMHOME'], args.run_name, args.allreduce)
     with open(jsonpath, 'w') as simfile:
         json.dump(sim, simfile, indent=4)
         simfile.close()
