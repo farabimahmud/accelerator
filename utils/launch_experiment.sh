@@ -6,7 +6,7 @@ for nn in AlphaGoZero DeepSpeech2 FasterRCNN NCF_recommendation \
 do
   for allreduce in multitree ring mxnettree
   do
-    python simulate.py \
+    python $SIMHOME/src/simulate.py \
       --network $SIMHOME/src/SCALE-Sim/topologies/mlperf/$nn.csv \
       --run-name ${nn} \
       --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \

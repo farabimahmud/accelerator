@@ -288,7 +288,11 @@ def main():
     sim['results']['power']['network']['link']['static'] = link_leak_power
     sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
 
-    jsonpath = '{}/results/logs/{}_{}.json'.format(os.environ['SIMHOME'], args.run_name, args.allreduce)
+    if args.outdir:
+        logpath = args.outdir
+    else:
+        logpath = '{}/results/logs'.format(os.environ['SIMHOME'])
+    jsonpath = '{}/{}_{}.json'.format(logpath, args.run_name, args.allreduce)
     with open(jsonpath, 'w') as simfile:
         json.dump(sim, simfile, indent=4)
         simfile.close()
