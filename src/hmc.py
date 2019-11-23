@@ -398,7 +398,7 @@ class HMC(SimObject):
                 self.free_nis.add(ni)
         if len(self.reduce_scatter_schedule) > 0:
             if len(self.free_nis) - len(self.just_allocated_nis) > 0:
-                logger.info('{} | {} | schedule event for reduce-scatter'.format(cur_cycle, self.name))
+                logger.debug('{} | {} | schedule event for reduce-scatter'.format(cur_cycle, self.name))
                 self.schedule('reduce-scatter', cur_cycle + 1)
         elif len(self.reduce_scatter_schedule) == 0 and \
                 len(self.free_nis) == self.args.radix and \
