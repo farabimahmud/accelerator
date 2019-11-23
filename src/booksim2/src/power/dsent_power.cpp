@@ -182,7 +182,7 @@ void DSENTPower::Run()
   cout << "Crossbar:" << endl;
   cout << "   Dyanmic power: " << _xbar_dyn_power << endl;
   cout << "   Leakage power: " << _xbar_leak_power << endl;
-  cout << "Switch allocator: " << endl;
+  cout << "Switch allocator:" << endl;
   cout << "   Dyanmic power: " << _sw_arb_local_dyn_power + _sw_arb_global_dyn_power << endl;
   cout << "   Leakage power: " << _sw_arb_leak_power << endl;
   cout << "Clock:" << endl;
