@@ -66,6 +66,8 @@ def init():
                         help='node radix connected to router (end node NIs), default is 4')
     parser.add_argument('--booksim-config', default='', required=True,
                         help='required config file for booksim')
+    parser.add_argument('--booksim-network', default='torus',
+                        help='network topology (torus | mesh), default is torus')
     parser.add_argument('-l', '--enable-logger', default=[], action='append',
                         help='Enable logging for a specific module, append module name')
     parser.add_argument('-v', '--verbose', default=False, action='store_true',
