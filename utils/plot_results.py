@@ -27,12 +27,15 @@ def main(folder_path):
     #        'NCF_recommendation_short', 'Resnet50', 'Sentimental_seqCNN',
     #        'Sentimental_seqLSTM', 'Sentimental_seqLSTM_short', 'Transformer',
     #        'Transformer_short']
-    benchmarks = ['AlphaGoZero', 'FasterRCNN', 'NCF_recommendation', 'Resnet50', 'Transformer_short']
+    #benchmarks = ['AlphaGoZero', 'FasterRCNN', 'NCF_recommendation', 'Resnet50', 'Transformer_short']
+    benchmarks = ['AlphaGoZero', 'FasterRCNN', 'NCF_recommendation', 'Transformer_short']
     names = ['ring', 'mxnettree', 'multitree']
     schemes = ['Ring', 'MXNetTree', 'MultiTree']
 
     entry_names = ['Allreduce', 'Training']
-    xlabels = ['AlphaGoZero', 'FasterRCNN', 'NCF', 'Resnet50', 'Transformer-s']
+    energy_entry_names = ['Dynamic', 'Static']
+    #xlabels = ['AlphaGoZero', 'FasterRCNN', 'NCF', 'Resnet50', 'Transformer-s']
+    xlabels = ['AlphaGoZero', 'FasterRCNN', 'NCF', 'Transformer-s']
     xlabels.append('gmean')
     group_names = []
 
@@ -46,6 +49,23 @@ def main(folder_path):
     allreduce_cycles = np.zeros((int(len(schemes)), int(len(benchmarks))), dtype=np.float)
     cycles_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
     norm_cycles_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
+
+    total_power = np.zeros(
+        (int(len(schemes)), int(len(benchmarks))), dtype=np.float)
+    dynamic_power = np.zeros(
+        (int(len(schemes)), int(len(benchmarks))), dtype=np.float)
+    static_power = np.zeros(
+        (int(len(schemes)), int(len(benchmarks))), dtype=np.float)
+    power_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
+    norm_power_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
+    total_energy = np.zeros(
+        (int(len(schemes)), int(len(benchmarks))), dtype=np.float)
+    dynamic_energy = np.zeros(
+        (int(len(schemes)), int(len(benchmarks))), dtype=np.float)
+    static_energy = np.zeros(
+        (int(len(schemes)), int(len(benchmarks))), dtype=np.float)
+    energy_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
+    norm_energy_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
 
     for s, scheme in enumerate(schemes):
         for b, bench in enumerate(benchmarks):
@@ -63,6 +83,17 @@ def main(folder_path):
                 cycles_breakdown[0][b * len(schemes) + s] = allreduce_cycles[s][b]
                 cycles_breakdown[1][b * len(schemes) + s] = training_cycles[s][b]
 
+                total_power[s][b] = sim['results']['power']['network']['total']
+                dynamic_power[s][b] = sim['results']['power']['network']['dynamic']
+                static_power[s][b] = sim['results']['power']['network']['static']
+                power_breakdown[0][b * len(schemes) + s] = dynamic_power[s][b]
+                power_breakdown[1][b * len(schemes) + s] = static_power[s][b]
+
+                total_energy[s][b] = total_power[s][b] * cycles[s][b]
+                dynamic_energy[s][b] = dynamic_power[s][b] * cycles[s][b]
+                static_energy[s][b] = static_power[s][b] * cycles[s][b]
+                energy_breakdown[0][b * len(schemes) + s] = dynamic_energy[s][b]
+                energy_breakdown[1][b * len(schemes) + s] = static_energy[s][b]
 
                 json_file.close()
 
@@ -85,9 +116,14 @@ def main(folder_path):
             group_names.append(scheme)
             for e, entry in enumerate(entry_names):
                 norm_cycles_breakdown[e][b * len(schemes) + s] = cycles_breakdown[e][b * len(schemes) + s] / cycles[0][b]
-    #norm_cycles_breakdown[norm_cycles_breakdown == np.inf] = 0
-    #norm_cycles_breakdown[norm_cycles_breakdown == -np.inf] = 0
     norm_cycles_breakdown[np.isnan(norm_cycles_breakdown)] = 0
+    for b, bench in enumerate(benchmarks):
+        for s, scheme in enumerate(schemes):
+            for e, entry in enumerate(energy_entry_names):
+                norm_energy_breakdown[e][b * len(schemes) + s] = energy_breakdown[e][b * len(schemes) + s] / total_energy[0][b]
+                norm_energy_breakdown[e][b * len(schemes) + s] = energy_breakdown[e][b * len(schemes) + s] / total_energy[0][b]
+    norm_power_breakdown[np.isnan(norm_power_breakdown)] = 0
+    norm_energy_breakdown[np.isnan(norm_energy_breakdown)] = 0
     #print(norm_cycles_breakdown)
 
     '''
@@ -208,7 +244,56 @@ def main(folder_path):
         bbox_to_anchor=(0.5, 1.18),
         ncol=len(entry_names),
         frameon=False,
-        handletextpad=0.1,
+        handletextpad=0.6,
+        columnspacing=1)
+    fmt.resize_ax_box(ax, hratio=0.78)
+    ly = len(benchmarks)
+    scale = 1. / ly
+    ypos = -.4
+    pos = 0
+    for pos in xrange(ly + 1):
+        lxpos = (pos + 0.5) * scale
+        if pos < ly:
+            ax.text(
+                lxpos, ypos, xlabels[pos], ha='center', transform=ax.transAxes)
+        add_line(ax, pos * scale, ypos)
+    pdf.plot_teardown(pdfpage)
+
+    # normalized power breakdown
+    colors = ['#a63603','#fee6ce']
+    xticks = []
+    for i in range(0, len(benchmarks)):
+        for j in range(0, len(schemes)):
+            xticks.append(i * (len(schemes) + 1) + j)
+    data = [list(i) for i in zip(*norm_energy_breakdown)]
+    data = np.array(data, dtype=np.float64)
+    figpath = folder_path + '/norm_energy.pdf'
+    pdfpage, fig = pdf.plot_setup(figpath, figsize=(10, 6), fontsize=18)
+    ax = fig.gca()
+    hdls = barchart.draw(
+        ax,
+        data,
+        group_names=group_names,
+        entry_names=energy_entry_names,
+        breakdown=True,
+        xticks=xticks,
+        width=0.8,
+        colors=colors,
+        legendloc='upper center',
+        legendncol=len(energy_entry_names),
+        xticklabelfontsize=16,
+        xticklabelrotation=90,
+        log=False)
+    ax.set_ylabel('Normalized Energy Breakdown')
+    ax.yaxis.grid(True, linestyle='--')
+    ax.legend(
+        hdls,
+        energy_entry_names,
+        loc='upper center',
+        bbox_to_anchor=(0.5, 1.18),
+        ncol=len(energy_entry_names),
+        frameon=False,
+        handletextpad=0.6,
         columnspacing=1)
     fmt.resize_ax_box(ax, hratio=0.78)
     ly = len(benchmarks)
