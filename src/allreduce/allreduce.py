@@ -269,12 +269,15 @@ class Allreduce(ABC):
     # end of max_num_concurrent_flows()
 
 
-import networks
+import sys
+import math
+
+sys.path.append('{}/src/allreduce/network'.format(os.environ['SIMHOME']))
+
+from network import construct_network
 from ring_allreduce import RingAllreduce
 from multitree_allreduce import MultiTreeAllreduce
 from mxnettree_allreduce import MXNetTreeAllreduce
-
-import math
 
 
 '''
@@ -288,8 +291,7 @@ def construct_allreduce(args):
     assert args.num_hmcs == dimension * dimension
     args.nodes = args.num_hmcs
     args.dimension = dimension
-    network = networks.Torus(args)
-    network.build_graph()
+    network = construct_network(args)
 
     if args.allreduce == 'multitree':
         allreduce = MultiTreeAllreduce(args, network)

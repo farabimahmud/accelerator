@@ -1,6 +1,10 @@
 import argparse
+import sys
+import os
 
-import networks
+sys.path.append('{}/src/allreduce/network'.format(os.environ['SIMHOME']))
+
+from network import construct_network
 from allreduce import Allreduce
 
 
@@ -179,9 +183,8 @@ class RingAllreduce(Allreduce):
 
 
 def test(args):
-    dimension = args.dimension
-    network = networks.Torus(args)
-    network.build_graph()
+    args.num_hmcs = int(args.dimension * args.dimension)
+    network = construct_network(args)
     # network.to_nodes[1].clear() # test no solution case
 
     allreduce = RingAllreduce(args, network)
@@ -200,6 +203,8 @@ if __name__ == '__main__':
                         help='network dimension, default is 4')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
+    parser.add_argument('--booksim-network', default='torus',
+                        help='network topology (torus | mesh), default is torus')
 
     args = parser.parse_args()
 

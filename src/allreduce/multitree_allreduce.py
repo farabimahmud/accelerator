@@ -1,8 +1,12 @@
 import argparse
 import numpy as np
 from copy import deepcopy
+import sys
+import os
 
-import networks
+sys.path.append('{}/src/allreduce/network'.format(os.environ['SIMHOME']))
+
+from network import construct_network
 from allreduce import Allreduce
 
 
@@ -64,38 +68,35 @@ class MultiTreeAllreduce(Allreduce):
 
                     root = sorted_roots[turns % self.network.nodes]
 
-                    while len(tree_nodes[root]) == self.network.nodes:
-                        turns += 1
-                        root = turns % self.network.nodes
-                        continue
-                    if verbose:
+                    if len(tree_nodes[root]) < self.network.nodes and verbose:
                         p = (turns // self.network.nodes) % len(tree_nodes[root])
                         parent = tree_nodes[root][p]
                         print('turns: {}, root: {}, p: {}, parent: {}'.format(turns, root, p, parent))
 
-                    for parent in last_tree_nodes[root]:
-                        children = deepcopy(from_nodes[parent])
-                        if num_new_children[root][parent] == kary - 1:
-                            conflicts[root] += 1
-                            continue
-                        for child in children:
-                            if child not in tree_nodes[root]:
-                                num_new_children[root][parent] += 1
-                                if verbose:
-                                    print(' -- add node {} to tree {}'.format(child, root))
-                                    print('    before: {}'.format(self.trees[root]))
-                                from_nodes[parent].remove(child)
-                                tree_nodes[root].append(child)
-                                self.trees[root].append((child, parent, self.timesteps))
-                                if verbose:
-                                    print('    after : {}'.format(self.trees[root]))
-                                    print('    tree nodes: {}'.format(tree_nodes[root]))
-                                changed = True
-                                break
-                            else:
+                    if len(tree_nodes[root]) < self.network.nodes:
+                        for parent in last_tree_nodes[root]:
+                            children = deepcopy(from_nodes[parent])
+                            if num_new_children[root][parent] == kary - 1:
                                 conflicts[root] += 1
-                        if changed:
-                            break
+                                continue
+                            for child in children:
+                                if child not in tree_nodes[root]:
+                                    num_new_children[root][parent] += 1
+                                    if verbose:
+                                        print(' -- add node {} to tree {}'.format(child, root))
+                                        print('    before: {}'.format(self.trees[root]))
+                                    from_nodes[parent].remove(child)
+                                    tree_nodes[root].append(child)
+                                    self.trees[root].append((child, parent, self.timesteps))
+                                    if verbose:
+                                        print('    after : {}'.format(self.trees[root]))
+                                        print('    tree nodes: {}'.format(tree_nodes[root]))
+                                    changed = True
+                                    break
+                                else:
+                                    conflicts[root] += 1
+                            if changed:
+                                break
 
                     turns += 1
 
@@ -258,14 +259,13 @@ class MultiTreeAllreduce(Allreduce):
 
 
 def test(args):
-    dimension = args.dimension
-    network = networks.Torus(args)
-    network.build_graph()
+    args.num_hmcs = int(args.dimension * args.dimension)
+    network = construct_network(args)
 
     kary = args.kary
     allreduce = MultiTreeAllreduce(args, network)
     # NOTE: sorted doesn't help for multitree since it only considers available links
-    allreduce.compute_trees(kary, alternate=True, sort=False)
+    allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree.dot')
     timesteps = allreduce.timesteps
@@ -298,6 +298,8 @@ if __name__ == '__main__':
                         help='node radix, default is 4')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
+    parser.add_argument('--booksim-network', default='torus',
+                        help='network topology (torus | mesh), default is torus')
 
     args = parser.parse_args()
 

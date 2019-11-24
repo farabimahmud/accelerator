@@ -4,8 +4,12 @@ import random
 from datetime import datetime
 from copy import deepcopy
 import logging
+import sys
+import os
 
-import networks
+sys.path.append('{}/src/allreduce/network'.format(os.environ['SIMHOME']))
+
+from network import construct_network
 from allreduce import Allreduce
 
 logger = logging.getLogger(__name__)
@@ -1496,8 +1500,8 @@ class MXNetTreeAllreduce(Allreduce):
 
 def test(args):
     dimension = args.dimension
-    network = networks.Torus(args)
-    network.build_graph()
+    args.num_hmcs = int(dimension * dimension)
+    network = construct_network(args)
 
     kary = args.kary
     allreduce = MXNetTreeAllreduce(args, network)
@@ -1582,6 +1586,8 @@ if __name__ == '__main__':
                         help='use backtracking only, default is False')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
+    parser.add_argument('--booksim-network', default='torus',
+                        help='network topology (torus | mesh), default is torus')
 
     args = parser.parse_args()
 
