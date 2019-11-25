@@ -308,11 +308,11 @@ def main():
 
     if args.allreduce == 'multitree':
         if args.radix == 1 and args.message_size != 0:
-            jsonfile = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
+            jsonpath = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
         elif args.radix == 4 and args.message_size != 0:
-            jsonfile = '{}/{}_{}_beta.json'.format(args.logdir, args.run_name, args.allreduce)
+            jsonpath = '{}/{}_{}_beta.json'.format(args.logdir, args.run_name, args.allreduce)
         elif args.radix == 4 and args.message_size == 0:
-            jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+            jsonpath = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
     else:
         jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     with open(jsonpath, 'w') as simfile:
