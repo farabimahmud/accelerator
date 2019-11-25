@@ -76,16 +76,19 @@ def init():
                         help='message buffer size, default is 0 (infinite)')
     parser.add_argument('--message-size', default=64, type=int,
                         help='size of message, default is 64 bytes')
+    parser.add_argument('--strict-schedule', default=False, action='store_true',
+                        help='Strict schedule, default=False')
 
     args = parser.parse_args()
 
     if args.outdir:
-        logpath = args.outdir
+        args.logdir = args.outdir
     else:
         logpath = '{}/results/logs'.format(os.environ['SIMHOME'])
-    os.system('mkdir -p {}'.format(logpath))
-    logfile = '{}/{}_{}.log'.format(logpath, args.run_name, args.allreduce)
-    jsonfile = '{}/{}_{}.json'.format(logpath, args.run_name, args.allreduce)
+        args.logdir = logpath
+    os.system('mkdir -p {}'.format(args.outdir))
+    logfile = '{}/{}_{}.log'.format(args.logdir, args.run_name, args.allreduce)
+    jsonfile = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     if os.path.exists(logfile) or os.path.exists(jsonfile):
         raise RuntimeError('Warn: {} or {} already existed, may overwritten'.format(logfile, jsonfile))
 
@@ -109,7 +112,7 @@ def init():
         args.run_name = net_name + args.data_flow
 
     path = './outputs/' + args.run_name
-    args.outdir = path
+    args.outdir = '{}/outputs/{}'.format(args.outdir, args.run_name)
 
     arch_sec = 'architecture_presets'
 
@@ -131,14 +134,12 @@ def init():
 
     # Create output directory
     if args.dump:
-        if not os.path.exists("./outputs/"):
-            os.system("mkdir ./outputs")
-
-        if os.path.exists(args.outdir):
+        if not os.path.exists(args.outdir):
+            os.system('mkdir -p {}'.format(args.outdir))
+        elif os.path.exists(args.outdir):
             t = time.time()
             old_path = args.outdir + '_' + str(t)
             os.system('mv ' + args.outdir + ' ' + old_path)
-        os.system('mkdir ' + args.outdir)
 
     logger.info("====================================================")
     logger.info("******************* SCALE SIM **********************")
@@ -288,11 +289,7 @@ def main():
     sim['results']['power']['network']['link']['static'] = link_leak_power
     sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
 
-    if args.outdir:
-        logpath = args.outdir
-    else:
-        logpath = '{}/results/logs'.format(os.environ['SIMHOME'])
-    jsonpath = '{}/{}_{}.json'.format(logpath, args.run_name, args.allreduce)
+    jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     with open(jsonpath, 'w') as simfile:
         json.dump(sim, simfile, indent=4)
         simfile.close()
