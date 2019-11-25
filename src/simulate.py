@@ -76,10 +76,10 @@ def init():
                         help='Set the flag to only run allreduce communication')
     parser.add_argument('--message-buffer-size', default=0, type=int,
                         help='message buffer size, default is 0 (infinite)')
-    parser.add_argument('--message-size', default=64, type=int,
-                        help='size of a message, default is 64 bytes, 0 means treat the whole chunk of gradients as a message')
-    parser.add_argument('--sub-message-size', default=64, type=int,
-                        help='size of a sub message, default is 64 bytes')
+    parser.add_argument('--message-size', default=256, type=int,
+                        help='size of a message, default is 256 bytes, 0 means treat the whole chunk of gradients as a message')
+    parser.add_argument('--sub-message-size', default=256, type=int,
+                        help='size of a sub message, default is 256 bytes')
     parser.add_argument('--strict-schedule', default=False, action='store_true',
                         help='strict schedule, default=False')
     parser.add_argument('--synthetic-data-size', default=0, type=int,
