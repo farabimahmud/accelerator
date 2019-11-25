@@ -4,12 +4,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Message:
-    def __init__(self, flow, src, dest, size, msgtype):
+    def __init__(self, flow, mid, src, dest, size, msgtype, submsgtype):
         self.flow = flow
+        self.id = mid
         self.src = src
         self.dest = dest
         self.size = size
         self.type = msgtype
+        self.submsgtype = submsgtype
 
 
 class MessageBuffer:

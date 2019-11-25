@@ -1,5 +1,6 @@
 import sys
 import math
+import numpy as np
 from copy import deepcopy
 import logging
 
@@ -19,6 +20,7 @@ class HMC(SimObject):
     training_cycles = None
     model_aggregation_cycles = None
     allreduce_aggregation_cycles = None
+    cur_mid = 0 # global message ID
 
     def __init__(self, i, args, eventq):
         super().__init__(eventq)
@@ -43,7 +45,9 @@ class HMC(SimObject):
         self.mini_batch_per_npu = math.ceil(self.args.mini_batch_size / self.args.num_vaults)
 
         self.message_size = args.message_size # bytes
+        self.sub_message_size = args.sub_message_size
         self.num_messages = None
+        self.num_sub_messages = None
 
         # for the schedule semantics, refer to allreduce/allreduce.py
         self.allreduce = None
@@ -51,6 +55,10 @@ class HMC(SimObject):
         self.all_gather_schedule = None
         self.new_step = True
 
+        self.cur_mids = np.zeros(self.args.radix, dtype=int)
+        for i in range(self.args.radix):
+            self.cur_mids[i] = HMC.cur_mid
+            HMC.cur_mid += 1
         self.sending = [None for i in range(self.args.radix)]
         self.free_nis = set([i for i in range(self.args.radix)])
         self.just_allocated_nis = {}
@@ -68,8 +76,17 @@ class HMC(SimObject):
     '''
     def load_model(self, model):
         self.model = model
-        self.num_messages = math.ceil(self.model.size * self.bytes_per_param /
-                self.message_size / self.args.num_hmcs)
+        if self.message_size == 0:
+            self.num_messages = 1
+            self.num_sub_messages = math.ceil(self.model.size * self.bytes_per_param /
+                    self.sub_message_size / self.args.num_hmcs)
+        else:
+            assert self.message_size >= self.sub_message_size
+            self.num_messages = math.ceil(self.model.size * self.bytes_per_param /
+                    self.message_size / self.args.num_hmcs)
+            self.num_sub_messages = math.ceil(self.message_size / self.sub_message_size)
+
+        print('num_messages {}, num_sub_messages {}'.format(self.num_messages, self.num_sub_messages))
     # end of load_model()
 
 
@@ -381,7 +398,15 @@ class HMC(SimObject):
                 dest_ni = sending[2]
                 src_node = self.id * self.args.radix + ni
                 dest_node = dest * self.args.radix + dest_ni
-                message = Message(flow, src_node, dest_node, self.message_size, pybooksim.Message.ReduceData)
+                if self.num_sub_messages == 1:
+                    submsgtype = pybooksim.Message.HeadTail
+                elif self.messages_sent[ni] % self.num_sub_messages == 0:
+                    submsgtype = pybooksim.Message.Head
+                elif (self.messages_sent[ni] + 1) % self.num_sub_messages == 0:
+                    submsgtype = pybooksim.Message.Tail
+                else:
+                    submsgtype = pybooksim.Message.Body
+                message = Message(flow, self.cur_mids[ni], src_node, dest_node, self.sub_message_size, pybooksim.Message.ReduceData, submsgtype)
                 self.to_network_message_buffers[ni].enqueue(message, cur_cycle, 1)
                 self.messages_sent[ni] += 1
                 #print('{} | {} | sends a reduce message to for flow {} (from NI {}) to parent HMC-{} (to NI {}), sent messages {}'.format(cur_cycle, self.name, flow, ni, dest, dest_ni, self.messages_sent[ni]))
@@ -396,7 +421,10 @@ class HMC(SimObject):
         for ni, sending in enumerate(self.sending):
             if sending == None:
                 continue
-            if self.messages_sent[ni] < self.num_messages:
+            if self.messages_sent[ni] % self.num_sub_messages == 0:
+                self.cur_mids[ni] = HMC.cur_mid
+                HMC.cur_mid += 1
+            if self.messages_sent[ni] < self.num_messages * self.num_sub_messages:
                 self.schedule('send-reduce-message', cur_cycle + 1)
             else:
                 flow = sending[0]
@@ -500,7 +528,15 @@ class HMC(SimObject):
                 dest_ni = sending[2]
                 src_node = self.id * self.args.radix + ni
                 dest_node = dest * self.args.radix + dest_ni
-                message = Message(flow, src_node, dest_node, self.message_size, pybooksim.Message.GatherData)
+                if self.num_sub_messages == 1:
+                    submsgtype = pybooksim.Message.HeadTail
+                elif self.messages_sent[ni] % self.num_sub_messages == 0:
+                    submsgtype = pybooksim.Message.Head
+                elif (self.messages_sent[ni] + 1) % self.num_sub_messages == 0:
+                    submsgtype = pybooksim.Message.Tail
+                else:
+                    submsgtype = pybooksim.Message.Body
+                message = Message(flow, self.cur_mids[ni], src_node, dest_node, self.sub_message_size, pybooksim.Message.GatherData, submsgtype)
                 self.to_network_message_buffers[ni].enqueue(message, cur_cycle, 1)
                 self.messages_sent[ni] += 1
                 #print('{} | {} | sends a gather message to for flow {} (from NI {}) to child HMC-{} (to NI {}), sent messages {}'.format(cur_cycle, self.name, flow, ni, dest, dest_ni, self.messages_sent[ni]))
@@ -515,7 +551,10 @@ class HMC(SimObject):
         for ni, sending in enumerate(self.sending):
             if sending == None:
                 continue
-            if self.messages_sent[ni] < self.num_messages:
+            if self.messages_sent[ni] % self.num_sub_messages == 0:
+                self.cur_mids[ni] = HMC.cur_mid
+                HMC.cur_mid += 1
+            if self.messages_sent[ni] < self.num_messages * self.num_sub_messages:
                     self.schedule('send-gather-message', cur_cycle + 1)
             else:
                 flow = sending[0]
@@ -570,7 +609,7 @@ class HMC(SimObject):
         for flow in range(self.args.num_hmcs):
             # handle reduce-scatter
             for src, messages_received in self.messages_received['reduce-scatter'][flow].items():
-                if messages_received == self.num_messages:
+                if messages_received == self.num_messages * self.num_sub_messages:
                     logger.info('{} | {} | receives full reduce for flow {} from child HMC-{}'.format(cur_cycle, self.name, flow, src))
                     self.messages_received['reduce-scatter'][flow][src] = 0
                     if self.computation_state == 'idle':
@@ -579,7 +618,7 @@ class HMC(SimObject):
                     self.pending_aggregations.append((flow, src))
 
             # handle all-gather
-            if self.messages_received['all-gather'][flow] == self.num_messages:
+            if self.messages_received['all-gather'][flow] == self.num_messages * self.num_sub_messages:
                 src = self.allreduce.trees_parent[flow][self.id]
                 logger.info('{} | {} | receives full gather for flow {} from parent HMC-{}'.format(cur_cycle, self.name, flow, src))
                 self.messages_received['all-gather'][flow] = 0
