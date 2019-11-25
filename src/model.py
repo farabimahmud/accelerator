@@ -5,12 +5,16 @@ logger = logging.getLogger(__name__)
 class Model:
     def __init__(self, args):
         self.args = args
-        self.num_layers = 0
-        self.layers = []
-        self.size = 0
-        self.name = args.network.split('/')[-1].split('.')[0]
+        if args.synthetic_data_size:
+            self.size = args.synthetic_data_size
+            assert args.only_allreduce
+        else:
+            self.size = 0
+            self.num_layers = 0
+            self.layers = []
+            self.name = args.network.split('/')[-1].split('.')[0]
 
-        self.parse_model()
+            self.parse_model()
 
     def parse_model(self):
         param_file = open(self.args.network, 'r')

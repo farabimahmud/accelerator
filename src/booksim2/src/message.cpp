@@ -7,6 +7,7 @@ ostream& operator<<(ostream &os, const Message &m)
 {
   os << "  Message ID: " << m.id << " (" << &m << ")"
     << " Type: " << Message::MessageTypeToString(m.type)
+    << " SubType: " << Message::SubMessageTypeToString(m.subtype)
     << " Size: " << m.size << endl;
   os << "  Flow: " << m.flow << " Source: " << m.src << "  Dest: " << m.dest
     << "  vnet: " << m.vnet << endl;
@@ -19,9 +20,10 @@ Message::Message()
   Reset();
 }
 
-void Message::Set(MessageType type_, int id_, int flow_, int src_, int dest_, int size_)
+void Message::Set(MessageType type_, SubMessageType subtype_, int id_, int flow_, int src_, int dest_, int size_)
 {
   type = type_;
+  subtype = subtype_;
   vnet = GetVirtualNetwork(type);
   id = id_;
   flow = flow_;
@@ -33,6 +35,7 @@ void Message::Set(MessageType type_, int id_, int flow_, int src_, int dest_, in
 void Message::Reset()
 {
   type = MessageType_NUM;
+  subtype = SubMessageType_NUM;
   vnet = -1;
   id = -1;
   flow = -1;
@@ -56,7 +59,7 @@ Message * Message::New() {
   return m;
 }
 
-Message * Message::New(MessageType type, int id, int flow, int src, int dest, int size)
+Message * Message::New(MessageType type, SubMessageType subtype, int id, int flow, int src, int dest, int size)
 {
   Message * m;
   if (_free.empty()) {
@@ -66,7 +69,7 @@ Message * Message::New(MessageType type, int id, int flow, int src, int dest, in
     m = _free.top();
     _free.pop();
   }
-  m->Set(type, id, flow, src, dest, size);
+  m->Set(type, subtype, id, flow, src, dest, size);
 
   return m;
 }
@@ -95,6 +98,24 @@ string Message::MessageTypeToString(const MessageType &type)
       exit(-1);
   }
 }
+
+string Message::SubMessageTypeToString(const SubMessageType &type)
+{
+  switch (type) {
+    case Head:
+      return "Head";
+    case Body:
+      return "Body";
+    case Tail:
+      return "Tail";
+    case HeadTail:
+      return "HeadTail";
+    default:
+      cerr << "Error: Unknown SubMessage Type " << type << endl;
+      exit(-1);
+  }
+}
+
 
 int Message::GetVirtualNetwork(const MessageType &type)
 {

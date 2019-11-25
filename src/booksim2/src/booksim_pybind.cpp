@@ -51,6 +51,13 @@ PYBIND11_MODULE(pybooksim, m) {
     .value("GatherData", Message::MessageType::GatherData)
     .value("MessageType_NUM", Message::MessageType::MessageType_NUM)
     .export_values();
+
+  py::enum_<Message::SubMessageType>(message, "SubMessageType")
+    .value("Head", Message::SubMessageType::Head)
+    .value("Body", Message::SubMessageType::Body)
+    .value("Tail", Message::SubMessageType::Tail)
+    .value("HeadTail", Message::SubMessageType::HeadTail)
+    .export_values();
 };
 
 #endif // #ifdef LIB_BOOKSIM
