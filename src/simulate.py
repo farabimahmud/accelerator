@@ -93,8 +93,19 @@ def init():
         logpath = '{}/results/logs'.format(os.environ['SIMHOME'])
         args.logdir = logpath
     os.system('mkdir -p {}'.format(args.outdir))
-    logfile = '{}/{}_{}.log'.format(args.logdir, args.run_name, args.allreduce)
-    jsonfile = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
+    if args.allreduce == 'multitree':
+        if args.radix == 1 and args.message_size != 0:
+            logfile = '{}/{}_{}_alpha.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
+        elif args.radix == 4 and args.message_size != 0:
+            logfile = '{}/{}_{}_beta.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}_beta.json'.format(args.logdir, args.run_name, args.allreduce)
+        elif args.radix == 4 and args.message_size == 0:
+            logfile = '{}/{}_{}_gamma.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+    else:
+        logfile = '{}/{}_{}.log'.format(args.logdir, args.run_name, args.allreduce)
+        jsonfile = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     if os.path.exists(logfile) or os.path.exists(jsonfile):
         raise RuntimeError('Warn: {} or {} already existed, may overwritten'.format(logfile, jsonfile))
 
@@ -295,7 +306,15 @@ def main():
     sim['results']['power']['network']['link']['static'] = link_leak_power
     sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
 
-    jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
+    if args.allreduce == 'multitree':
+        if args.radix == 1 and args.message_size != 0:
+            jsonfile = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
+        elif args.radix == 4 and args.message_size != 0:
+            jsonfile = '{}/{}_{}_beta.json'.format(args.logdir, args.run_name, args.allreduce)
+        elif args.radix == 4 and args.message_size == 0:
+            jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+    else:
+        jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     with open(jsonpath, 'w') as simfile:
         json.dump(sim, simfile, indent=4)
         simfile.close()
