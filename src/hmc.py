@@ -86,7 +86,6 @@ class HMC(SimObject):
                     self.message_size / self.args.num_hmcs)
             self.num_sub_messages = math.ceil(self.message_size / self.sub_message_size)
 
-        print('num_messages {}, num_sub_messages {}'.format(self.num_messages, self.num_sub_messages))
     # end of load_model()
 
 
