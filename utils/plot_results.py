@@ -27,15 +27,17 @@ def main(folder_path):
     #        'NCF_recommendation_short', 'Resnet50', 'Sentimental_seqCNN',
     #        'Sentimental_seqLSTM', 'Sentimental_seqLSTM_short', 'Transformer',
     #        'Transformer_short']
-    #benchmarks = ['AlphaGoZero', 'FasterRCNN', 'NCF_recommendation', 'Resnet50', 'Transformer_short']
-    benchmarks = ['AlphaGoZero', 'FasterRCNN', 'NCF_recommendation', 'Transformer_short']
+    benchmarks = ['AlphaGoZero', 'FasterRCNN', 'NCF_recommendation', 'Resnet50', 'Transformer_short']
+    #benchmarks = ['AlphaGoZero', 'FasterRCNN', 'NCF_recommendation', 'Transformer_short']
+    #benchmarks = ['AlphaGoZero', 'NCF_recommendation_short', 'Transformer_short']
     names = ['ring', 'mxnettree', 'multitree']
     schemes = ['Ring', 'MXNetTree', 'MultiTree']
 
     entry_names = ['Allreduce', 'Training']
     energy_entry_names = ['Dynamic', 'Static']
-    #xlabels = ['AlphaGoZero', 'FasterRCNN', 'NCF', 'Resnet50', 'Transformer-s']
-    xlabels = ['AlphaGoZero', 'FasterRCNN', 'NCF', 'Transformer-s']
+    xlabels = ['AlphaGoZero', 'FasterRCNN', 'NCF', 'Resnet50', 'Transformer-s']
+    #xlabels = ['AlphaGoZero', 'FasterRCNN', 'NCF', 'Transformer-s']
+    #xlabels = ['AlphaGoZero', 'NCF-s', 'Transformer-s']
     xlabels.append('gmean')
     group_names = []
 
@@ -144,14 +146,14 @@ def main(folder_path):
     '''
 
     colors = ['#e0f3db','#a8ddb5','#43a2ca']
-    plt.rc('legend', fontsize=18)
+    plt.rc('legend', fontsize=22)
     plt.rc('font', size=18)
 
     data = [list(i) for i in zip(*speedup)]
     data = np.array(data, dtype=np.float64)
     #fig = plt.figure(figsize=(8, 5.5))
     figpath = folder_path + '/speedup.pdf'
-    pdfpage, fig = pdf.plot_setup(figpath, figsize=(8, 5), fontsize=18)
+    pdfpage, fig = pdf.plot_setup(figpath, figsize=(8, 5), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
     hdls = barchart.draw(
         ax,
@@ -170,7 +172,7 @@ def main(folder_path):
         hdls,
         schemes,
         loc='upper center',
-        bbox_to_anchor=(0.5, 1.18),
+        bbox_to_anchor=(0.5, 1.25),
         ncol=len(schemes),
         frameon=False,
         handletextpad=0.6,
@@ -182,7 +184,7 @@ def main(folder_path):
     data = np.array(data, dtype=np.float64)
     #fig = plt.figure(figsize=(8, 5.5))
     figpath = folder_path + '/allreduce_speedup.pdf'
-    pdfpage, fig = pdf.plot_setup(figpath, figsize=(8, 5), fontsize=18)
+    pdfpage, fig = pdf.plot_setup(figpath, figsize=(8, 5), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
     hdls = barchart.draw(
         ax,
@@ -201,7 +203,7 @@ def main(folder_path):
         hdls,
         schemes,
         loc='upper center',
-        bbox_to_anchor=(0.5, 1.18),
+        bbox_to_anchor=(0.5, 1.25),
         ncol=len(schemes),
         frameon=False,
         handletextpad=0.6,
@@ -219,7 +221,7 @@ def main(folder_path):
     data = [list(i) for i in zip(*norm_cycles_breakdown)]
     data = np.array(data, dtype=np.float64)
     figpath = folder_path + '/norm_runtime.pdf'
-    pdfpage, fig = pdf.plot_setup(figpath, figsize=(10, 6), fontsize=18)
+    pdfpage, fig = pdf.plot_setup(figpath, figsize=(10, 6), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
     hdls = barchart.draw(
         ax,
@@ -232,7 +234,7 @@ def main(folder_path):
         colors=colors,
         legendloc='upper center',
         legendncol=len(entry_names),
-        xticklabelfontsize=16,
+        xticklabelfontsize=20,
         xticklabelrotation=90,
         log=False)
     ax.set_ylabel('Normalized Runtime Breakdown')
@@ -268,7 +270,7 @@ def main(folder_path):
     data = [list(i) for i in zip(*norm_energy_breakdown)]
     data = np.array(data, dtype=np.float64)
     figpath = folder_path + '/norm_energy.pdf'
-    pdfpage, fig = pdf.plot_setup(figpath, figsize=(10, 6), fontsize=18)
+    pdfpage, fig = pdf.plot_setup(figpath, figsize=(10, 6), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
     hdls = barchart.draw(
         ax,
@@ -281,7 +283,7 @@ def main(folder_path):
         colors=colors,
         legendloc='upper center',
         legendncol=len(energy_entry_names),
-        xticklabelfontsize=16,
+        xticklabelfontsize=20,
         xticklabelrotation=90,
         log=False)
     ax.set_ylabel('Normalized Energy Breakdown')
