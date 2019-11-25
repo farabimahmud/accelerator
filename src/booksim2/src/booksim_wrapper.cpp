@@ -55,6 +55,9 @@ BookSim::BookSim(string const & configfile)
 }
 
 BookSim::~BookSim() {
+  _traffic_manager->UpdateStats();
+  _traffic_manager->DisplayStats();
+
   if (_config->GetInt("sim_power") > 0) {
     if (_config->GetInt("dsent_power") > 0) {
       assert(_power_model != nullptr);
@@ -71,16 +74,19 @@ BookSim::~BookSim() {
   if (_power_model) delete _power_model;
 }
 
-int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type)
+int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type, Message::SubMessageType subtype)
 {
   if (id == -1) {
+    assert(subtype == Message::Head || subtype == Message::HeadTail);
     id = _cur_mid;
   }
 
-  Message *message = Message::New(type, id, flow, src, dest, msg_size);
+  Message *message = Message::New(type, subtype, id, flow, src, dest, msg_size);
   if (_traffic_manager->Enqueue(message)) {
     _outstanding_messages++;
-    _cur_mid++;
+    // only increment the global message ID for head or head_tail submessage
+    if (subtype == Message::Head || subtype == Message::HeadTail)
+      _cur_mid++;
   } else {
     message->Free();
     return -1;
@@ -127,11 +133,25 @@ bool BookSim::RunTest()
 {
   _print_messages = true;
 
+  vector<int> message_dests;
+  vector<int> message_ids;
+  vector<int> message_sizes;
+  vector<Message::MessageType> message_types;
+  message_ids.resize(gNodes, -1);
+  message_dests.resize(gNodes, -1);
+  message_sizes.resize(gNodes, 1024);
+  message_types.resize(gNodes, Message::MessageType_NUM);
+
   for (int src = 0; src < gNodes; src++) {
-    for (int dest = 0; dest < gNodes; dest++) {
-      Message::MessageType type = (Message::MessageType) RandomInt(Message::MessageType_NUM - 1);
-      IssueMessage(8, src, dest, -1, 64, type);
-    }
+    message_dests[src] = RandomInt(gNodes - 1);
+    int mid = -1;
+    Message::MessageType type = (Message::MessageType) RandomInt(Message::MessageType_NUM - 1);
+    Message::SubMessageType subtype = Message::Head;
+    mid = IssueMessage(8, src, message_dests[src], mid, 64, type, subtype);
+    assert(mid != -1);
+    message_ids[src] = mid;
+    message_types[src] = type;
+    message_sizes[src] -= 64;
   }
 
   while (!_traffic_manager->Idle() || _outstanding_messages > 0) {
@@ -140,6 +160,25 @@ bool BookSim::RunTest()
       for (int vnet = 0; vnet < 2; vnet++) {
         tuple<int, int, Message::MessageType> result = PeekMessage(node, vnet);
         if (get<1>(result) >= 0) DequeueMessage(node, vnet);
+      }
+    }
+
+    for (int src = 0; src < gNodes; src++) {
+      if (message_sizes[src] == 0)
+        continue;
+
+      int mid = message_ids[src];
+      Message::MessageType type = message_types[src];
+      Message::SubMessageType subtype;
+
+      if (message_sizes[src] == 64) {
+        subtype = Message::Tail;
+      } else {
+        subtype = Message::Body;
+      }
+      mid = IssueMessage(8, src, message_dests[src], mid, 64, type, subtype);
+      if (mid != -1) {
+        message_sizes[src] -= 64;
       }
     }
   }

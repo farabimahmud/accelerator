@@ -22,7 +22,16 @@ public:
     MessageType_NUM
   };
 
+  enum SubMessageType {
+    Head,
+    Body,
+    Tail,
+    HeadTail,
+    SubMessageType_NUM
+  };
+
   MessageType type;
+  SubMessageType subtype;
   int size; // bytes
 
   int vnet;
@@ -34,11 +43,12 @@ public:
   int dest;
 
   void Reset();
-  void Set(MessageType type_, int id_, int flow_, int src_, int dest_, int size);
+  void Set(MessageType type, SubMessageType subtype, int id, int flow, int src, int dest, int size);
 
   static Message *New();
-  static Message *New(MessageType type, int id, int flow, int src, int dest, int size);
+  static Message *New(MessageType type, SubMessageType subtype, int id, int flow, int src, int dest, int size);
   static string MessageTypeToString(const MessageType &type);
+  static string SubMessageTypeToString(const SubMessageType &type);
   static int GetVirtualNetwork(const MessageType &type);
   static int GetMessageSize(const MessageType &type);
   void Free();

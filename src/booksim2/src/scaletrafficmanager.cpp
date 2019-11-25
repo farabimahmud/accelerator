@@ -34,13 +34,14 @@ void ScaleTrafficManager::_RetireFlit(Flit *f, int dest)
   _deadlock_timer = 0;
 
   // send to the output message buffer
-  if (f->tail) {
+  if (f->tail || f->submsg_tail) {
     _output_buffer[dest][f->vnet].push_back(f->msg);
     if (f->watch) {
       *gWatchOut << GetSimTime() << " | " << FullName() << " | "
         << " HMC-" << dest
-        << " consumes the packet " << f->pid
-        << " with message " << *(f->msg) << "." << endl;
+        << " consumes the subpacket " << f->subpid
+        << " (packet " << f->pid
+        << ") with submessage " << *(f->msg) << "." << endl;
     }
   }
 
@@ -55,7 +56,9 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
 
   Flit::FlitType packet_type = Flit::ANY_TYPE;
 
-  int size = (int) ceil((double) Message::GetMessageSize(message->type)*8 / _flit_size);
+  int size = (int) ceil((double) message->size*8 / _flit_size); // only count payload of submessage
+  if (message->subtype == Message::Head || message->subtype == Message::HeadTail)
+    size++;
 
   int packet_dest = message->dest;
   bool record = true;
@@ -94,21 +97,25 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
   if (watch) {
     *gWatchOut << GetSimTime() << " | "
       << "node" << source << " | "
-      << "Enqueuing packet " << _cur_pid
+      << "Enqueuing subpacket " << _cur_pid
+      << " of packet " << message->id
       << " at time " << time
       << " through router " << source
       << " (to node " << packet_dest
       << " attached to router " << packet_dest
-      << ")." << endl;
+      << ") for submessage "
+      << *message << endl;
   }
 
-  int pid = _cur_pid++;
+  int pid = message->id;
+  int subpid = _cur_pid++;
 
   for (int i = 0; i < size; i++) {
     Flit * f = Flit::New();
     f->id = _cur_id++;
     assert(_cur_id);
     f->pid = pid;
+    f->subpid = subpid;
     f->watch = watch | (gWatchOut && (_flits_to_watch.count(f->id) > 0));
     f->subnetwork = subnetwork;
     f->src = source;
@@ -130,8 +137,10 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
     }
 
     if (i == 0) { // Head flit
-      f->head = true;
-      f->dest = packet_dest;
+      if (message->subtype == Message::Head || message->subtype == Message::HeadTail) {
+        f->head = true;
+        f->dest = packet_dest;
+      }
     } else {
       f->head = false;
       f->dest = -1;
@@ -152,7 +161,9 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
     assert(f->pri >= 0);
 
     if (i == (size - 1)) { // Tail flit
-      f->tail = true;
+      if (message->subtype == Message::Tail || message->subtype == Message::HeadTail)
+        f->tail = true;
+      f->submsg_tail = true;
     } else {
       f->tail = false;
     }
@@ -163,7 +174,8 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
       *gWatchOut << GetSimTime() << " | "
         << "node" << source << " | "
         << "Enqueuing flit " << f->id
-        << " (packet " << f->pid
+        << " (subpacket " << f->subpid
+        << ", packet " << f->pid
         << ") at time " << time
         << "." << endl;
     }
@@ -186,16 +198,24 @@ void ScaleTrafficManager::_Inject()
 
       if (_input_buffer[input][vnet].empty() == false) {
         Message *message = _input_buffer[input][vnet].front();
+
         Message::MessageType packet_type = message->type;
-        int size = (int) ceil((double) Message::GetMessageSize(packet_type)*8 / _flit_size);
+        int size = (int) ceil((double) message->size*8 / _flit_size); // only count payload of submessage
+        if (message->subtype == Message::Head || message->subtype == Message::HeadTail)
+          size++;
+
         assert(_inject_buf_size == 0 || size <= _inject_buf_size);
         if (_inject_buf_size == 0 ||
             _partial_packets[input][0].size() + size <= (size_t) _inject_buf_size) {
           _GeneratePacket(input, packet_type, vnet, _time);
           if (_watch_all_packets) {
             *gWatchOut << GetSimTime() << " | " << FullName()
-              << " | " << "HMC-" << input
-              << " generate new packets for message: " << endl;
+              << " | " << "HMC-" << input;
+            if (message->subtype == Message::Head || message->subtype == Message::HeadTail) {
+              *gWatchOut << " generate a new packet for message: " << endl;
+            } else {
+              *gWatchOut << " generate a new subpacket for message: " << endl;
+            }
             *gWatchOut << *message;
           }
           _input_buffer[input][vnet].pop_front();
@@ -227,7 +247,8 @@ void ScaleTrafficManager::_Step()
           *gWatchOut << GetSimTime() << " | "
             << "node" << n << " | "
             << "Ejecting flit " << f->id
-            << " (packet " << f->pid << ")"
+            << " (subpacket " << f->subpid
+            << ", packet " << f->pid << ")"
             << " from VC " << f->vc
             << "." << endl;
         }
