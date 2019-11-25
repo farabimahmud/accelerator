@@ -129,7 +129,7 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
       cout << "New Flit " << f->src << endl;
     }
 
-    if (i == 0) { // Headd flit
+    if (i == 0) { // Head flit
       f->head = true;
       f->dest = packet_dest;
     } else {
@@ -385,13 +385,15 @@ void ScaleTrafficManager::_Step()
           }
         } else {
           if (dest_buf->IsFullFor(cf->vc)) {
-            assert("Jiayi: why it should be?" == nullptr);
             if (cf->watch) {
               *gWatchOut << GetSimTime() << " | " << FullName() << " | "
                 << "Selected output VC " << cf->vc
                 << " is full for flit " << cf->id
                 << "." << endl;
             }
+            // when buffer size is smaller than pacekt size, hold switch will
+            // break and it will come here
+            //assert("Jiayi: why it should be?" == nullptr);
           } else {
             f = cf;
           }

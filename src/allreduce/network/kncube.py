@@ -1,19 +1,17 @@
-import os
 import argparse
-import numpy as np
-from copy import deepcopy
 
-class Torus:
-    def __init__(self, args):
-        self.args = args
-        self.nodes = args.dimension * args.dimension
-        self.dimension = args.dimension
-        self.from_nodes = {}
-        self.to_nodes = {}
-        self.edges = []
-        self.adjacency_matrix = np.zeros((self.nodes, self.nodes))
+from network import Network
+
+class KNCube(Network):
+    def __init__(self, args, mesh=False):
+        self.mesh = mesh
+        super().__init__(args)
 
 
+    '''
+    build_graph() - build the topology graph
+    @filename: filename to generate topology dotfile, optional
+    '''
     def build_graph(self, filename=None):
 
         link_weight = 2
@@ -26,55 +24,58 @@ class Torus:
             col = node % self.dimension
             #print('node {}: row {} col {}'.format(node, row, col))
 
-            if row == 0:
+            if row == 0 and not self.mesh:
                 if self.dimension > 2:
                     north = node + self.dimension * (self.dimension - 1)
                     self.from_nodes[node].append(north)
                     self.to_nodes[node].append(north)
                     self.adjacency_matrix[node][north] = link_weight
                     self.adjacency_matrix[north][node] = link_weight
-            else:
+            elif row != 0:
                 north = node - self.dimension
                 self.from_nodes[node].append(north)
                 self.to_nodes[node].append(north)
                 self.adjacency_matrix[node][north] = link_weight
                 self.adjacency_matrix[north][node] = link_weight
 
-            if row == self.dimension - 1:
+            if row == self.dimension - 1 and not self.mesh:
                 if self.dimension > 2:
                     south = node - self.dimension * (self.dimension - 1)
                     self.from_nodes[node].append(south)
                     self.to_nodes[node].append(south)
-            else:
+            elif row != self.dimension - 1:
                 south = node + self.dimension
                 self.from_nodes[node].append(south)
                 self.to_nodes[node].append(south)
 
-            if col == 0:
+            if col == 0 and not self.mesh:
                 if self.dimension > 2:
                     west = node + self.dimension - 1
                     self.from_nodes[node].append(west)
                     self.to_nodes[node].append(west)
                     self.adjacency_matrix[node][west] = link_weight
                     self.adjacency_matrix[west][node] = link_weight
-            else:
+            elif col != 0:
                 west = node - 1
                 self.from_nodes[node].append(west)
                 self.to_nodes[node].append(west)
                 self.adjacency_matrix[node][west] = link_weight
                 self.adjacency_matrix[west][node] = link_weight
 
-            if col == self.dimension - 1:
+            if col == self.dimension - 1 and not self.mesh:
                 if self.dimension > 2:
                     east = node - self.dimension + 1
                     self.from_nodes[node].append(east)
                     self.to_nodes[node].append(east)
-            else:
+            elif col != self.dimension - 1:
                 east = node + 1
                 self.from_nodes[node].append(east)
                 self.to_nodes[node].append(east)
 
-        #print('torus graph: (node: from node list)')
+        #if self.mesh:
+        #    print('mesh graph: (node: from node list)')
+        #else:
+        #    print('torus graph: (node: from node list)')
         #for node in range(self.nodes):
         #    print(' -- {}: {}'.format(node, self.from_nodes[node]))
 
@@ -111,11 +112,15 @@ def test():
 
     parser.add_argument('--dimension', default=4, type=int,
                         help='network dimension, default is 4')
+    parser.add_argument('--filename', default=None,
+                        help='File name for topology dotfile, default None (no dotfile)')
+    parser.add_argument('--mesh', default=False, action='store_true',
+                        help='Create mesh network, default False (torus)')
 
     args = parser.parse_args()
 
-    network = Torus(args)
-    network.build_graph()
+    network = KNCube(args, args.mesh)
+    network.build_graph(args.filename)
 
 
 if __name__ == '__main__':
