@@ -1,39 +1,97 @@
 #!/bin/sh
 
-outdir=$SIMHOME/results/logs_strict_schedule_nov_23
+outdir=$SIMHOME/results/logs
 
 mkdir -p $outdir
 
-# MLPerf
-for nn in AlphaGoZero DeepSpeech2 FasterRCNN NCF_recommendation \
-  NCF_recommendation_short Resnet50 Sentimental_seqCNN Sentimental_seqLSTM \
-  Sentimental_seqLSTM_short Transformer Transformer_short
+mlperfdir=$SIMHOME/src/SCALE-Sim/topologies/mlperf
+cnndir=$SIMHOME/src/SCALE-Sim/topologies/conv_nets
+
+# baselines
+for nnpath in $mlperfdir/AlphaGoZero $mlperfdir/FasterRCNN $mlperfdir/NCF_recommendation \
+  $mlperfdir/Resnet50 $mlperfdir/Transformer $mlperfdir/Transformer_short \
+  $cnndir/alexnet $cnndir/Googlenet
 do
-  for allreduce in multitree ring mxnettree
+  nn=$(basename $nnpath)
+  for allreduce in ring mxnettree
   do
     python $SIMHOME/src/simulate.py \
-      --network $SIMHOME/src/SCALE-Sim/topologies/mlperf/$nn.csv \
+      --network $nnpath.csv \
       --run-name ${nn} \
-      --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
+      --booksim-config $SIMHOME/src/booksim2/runfiles/torus44express.cfg \
       --allreduce $allreduce \
       --outdir $outdir \
+      --kary 2 \
+      --radix 1 \
       --message-buffer-size 32 \
-      > $SIMHOME/results/logs_strict_schedule_nov_23/${nn}_${allreduce}_error.log 2>&1 &
+      --message-size 256 \
+      --sub-message-size 256 \
+      > $outdir/${nn}_${allreduce}_error.log 2>&1 &
   done
 done
 
-# CNN
-for nn in alexnet Googlenet
+# multitree-alpha
+for nnpath in $mlperfdir/AlphaGoZero $mlperfdir/FasterRCNN $mlperfdir/NCF_recommendation \
+  $mlperfdir/Resnet50 $mlperfdir/Transformer $mlperfdir/Transformer_short \
+  $cnndir/alexnet $cnndir/Googlenet
 do
-  for allreduce in multitree ring mxnettree
-  do
-    python $SIMHOME/src/simulate.py \
-      --network $SIMHOME/src/SCALE-Sim/topologies/conv_nets/$nn.csv \
-      --run-name ${nn} \
-      --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
-      --allreduce $allreduce \
-      --outdir $outdir \
-      --message-buffer-size 32 \
-      > $SIMHOME/results/logs_strict_schedule_nov_23/${nn}_${allreduce}_error.log 2>&1 &
-  done
+  nn=$(basename $nnpath)
+  allreduce=multitree
+  python $SIMHOME/src/simulate.py \
+    --network $nnpath.csv \
+    --run-name ${nn} \
+    --booksim-config $SIMHOME/src/booksim2/runfiles/torus44express.cfg \
+    --allreduce $allreduce \
+    --outdir $outdir \
+    --kary 5 \
+    --radix 1 \
+    --only-allreduce \
+    --message-buffer-size 32 \
+    --message-size 256 \
+    --sub-message-size 256 \
+    > $outdir/${nn}_${allreduce}_alpha_error.log 2>&1 &
+done
+
+# multitree-beta
+for nnpath in $mlperfdir/AlphaGoZero $mlperfdir/FasterRCNN $mlperfdir/NCF_recommendation \
+  $mlperfdir/Resnet50 $mlperfdir/Transformer $mlperfdir/Transformer_short \
+  $cnndir/alexnet $cnndir/Googlenet
+do
+  nn=$(basename $nnpath)
+  allreduce=multitree
+  python $SIMHOME/src/simulate.py \
+    --network $nnpath.csv \
+    --run-name ${nn} \
+    --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
+    --allreduce $allreduce \
+    --outdir $outdir \
+    --kary 5 \
+    --radix 4 \
+    --only-allreduce \
+    --message-buffer-size 32 \
+    --message-size 256 \
+    --sub-message-size 256 \
+    > $outdir/${nn}_${allreduce}_beta_error.log 2>&1 &
+done
+
+# multitree-gamma
+for nnpath in $mlperfdir/AlphaGoZero $mlperfdir/FasterRCNN $mlperfdir/NCF_recommendation \
+  $mlperfdir/Resnet50 $mlperfdir/Transformer $mlperfdir/Transformer_short \
+  $cnndir/alexnet $cnndir/Googlenet
+do
+  nn=$(basename $nnpath)
+  allreduce=multitree
+  python $SIMHOME/src/simulate.py \
+    --network $nnpath.csv \
+    --run-name ${nn} \
+    --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
+    --allreduce $allreduce \
+    --outdir $outdir \
+    --kary 5 \
+    --radix 4 \
+    --only-allreduce \
+    --message-buffer-size 32 \
+    --message-size 0 \
+    --sub-message-size 256 \
+    > $outdir/${nn}_${allreduce}_gamma_error.log 2>&1 &
 done
