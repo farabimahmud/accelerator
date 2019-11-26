@@ -93,7 +93,7 @@ def init():
         logpath = '{}/results/logs'.format(os.environ['SIMHOME'])
         args.logdir = logpath
     os.system('mkdir -p {}'.format(args.outdir))
-    if argsallreduce == 'mxnettree' or args.allreduce == 'multitree':
+    if args.allreduce == 'mxnettree' or args.allreduce == 'multitree':
         if args.radix == 1 and args.message_size != 0:
             logfile = '{}/{}_{}_alpha.log'.format(args.logdir, args.run_name, args.allreduce)
             jsonfile = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
@@ -227,26 +227,21 @@ def main():
 
     do_sim_loop(global_eventq)
 
-    assert network.booksim.Idle()
     logger.debug('booksim network idle? {}'.format(network.booksim.Idle()))
     for i, hmc in enumerate(hmcs):
         logger.debug('HMC {}:'.format(i))
         logger.debug('   reduce-scatter-schedule:')
         for schedule in hmc.reduce_scatter_schedule:
             logger.debug('       {}'.format(schedule))
-        assert len(hmc.reduce_scatter_schedule) == 0
         logger.debug('   all-gather-schedule:')
         for schedule in hmc.all_gather_schedule:
             logger.debug('       {}'.format(schedule))
-        assert len(hmc.all_gather_schedule) == 0
         logger.debug('   from network message buffers:')
         for i, message_buffer in enumerate(hmc.from_network_message_buffers):
             logger.debug('       {}-{}: has {} messages'.format(i, message_buffer.name, message_buffer.size))
-            assert message_buffer.size == 0
         logger.debug('   to network message buffers:')
         for i, message_buffer in enumerate(hmc.to_network_message_buffers):
             logger.debug('       {}-{}: has {} messages'.format(i, message_buffer.name, message_buffer.size))
-            assert message_buffer.size == 0
 
     compute_cycles = hmcs[0].compute_cycles
     allreduce_compute_cycles = 0
@@ -268,6 +263,16 @@ def main():
     logger.info(' - allreduce: {} cycles ({:.2f}%)'.format(allreduce_cycles, allreduce_percentile))
     logger.info('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
     logger.info('     - pure communication: {} cycles ({:.2f}%)\n'.format(pure_communication_cycles, pure_communication_percentile))
+
+    assert network.booksim.Idle()
+    for i, hmc in enumerate(hmcs):
+        assert len(hmc.pending_aggregations) == 0
+        assert len(hmc.reduce_scatter_schedule) == 0
+        assert len(hmc.all_gather_schedule) == 0
+        for i, message_buffer in enumerate(hmc.from_network_message_buffers):
+            assert message_buffer.size == 0
+        for i, message_buffer in enumerate(hmc.to_network_message_buffers):
+            assert message_buffer.size == 0
 
     if args.dump:
         cleanup(args)
@@ -306,7 +311,7 @@ def main():
     sim['results']['power']['network']['link']['static'] = link_leak_power
     sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
 
-    if argsallreduce == 'mxnettree' or args.allreduce == 'multitree':
+    if args.allreduce == 'mxnettree' or args.allreduce == 'multitree':
         if args.radix == 1 and args.message_size != 0:
             jsonpath = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
         elif args.radix == 4 and args.message_size != 0:

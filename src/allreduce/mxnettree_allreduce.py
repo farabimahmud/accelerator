@@ -1464,7 +1464,7 @@ class MXNetTreeAllreduce(Allreduce):
         trees = deepcopy(self.conflict_trees)
 
         for node in range(self.network.nodes):
-            self.reduce_scatter_schedule[node] = [{node: ((None, None), self.trees_children[node][node])}]
+            self.reduce_scatter_schedule[node] = [{}, {node: ((None, None), self.trees_children[node][node])}]
             self.all_gather_schedule[node] = [{}]
 
         reduce_scatter_ni = np.zeros(self.network.nodes, dtype=int)
