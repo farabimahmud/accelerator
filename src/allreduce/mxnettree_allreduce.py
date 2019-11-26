@@ -55,7 +55,7 @@ class MXNetTreeAllreduce(Allreduce):
     '''
     def compute_best_trees(self, trials, kary, alternate=True, sort=True, verbose=False):
         # TODO: this is for torus network, for other networks, it should be changed
-        if self.network.nodes > 16:
+        if self.network.nodes > 16 or self.args.booksim_network == 'mesh':
             self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
             return
 
@@ -182,7 +182,7 @@ class MXNetTreeAllreduce(Allreduce):
 
         success = True
         if reset:
-            if self.network.nodes > 16:
+            if self.network.nodes > 16 or self.args.booksim_network == 'mesh':
                 if not self.silent:
                     print('No valid tree found from root {} and network too big ({} nodes)'
                             ', compute torus tree'.format(root, self.network.nodes))
