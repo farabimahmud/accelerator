@@ -158,7 +158,7 @@ class MXNetTreeAllreduce(Allreduce):
         level = 0
 
         # TODO: the last condition is just for torus
-        while (not self.backtrack) and (not stop or reset) and (self.network.nodes <= 16):
+        while (not self.backtrack) and (not stop or reset) and (self.network.nodes <= 16) and self.args.booksim_network == 'torus':
             if reset:
                 cluster_pairs.clear()
                 partitions_temp = deepcopy(partitions)
