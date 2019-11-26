@@ -27,7 +27,7 @@ do
     > $outdir/${nodes}nodes_${data}data_ring_error.log 2>&1 &
 done
 
-# mxnettree
+# mxnettree-alpah
 for nodes in 16 36 64 100 144 196 256
 do
   python $SIMHOME/src/simulate.py \
@@ -42,7 +42,25 @@ do
     --sub-message-size 256 \
     --only-allreduce \
     --synthetic-data-size $data \
-    > $outdir/${nodes}nodes_${data}data_mxnettree_error.log 2>&1 &
+    > $outdir/${nodes}nodes_${data}data_mxnettree_alpha_error.log 2>&1 &
+done
+
+# mxnettree-beta
+for nodes in 16 36 64 100 144 196 256
+do
+  python $SIMHOME/src/simulate.py \
+    --run-name ${nodes}nodes_${data}data \
+    --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
+    --allreduce mxnettree \
+    --outdir $outdir \
+    --kary 5 \
+    --radix 4 \
+    --message-buffer-size 32 \
+    --message-size 256 \
+    --sub-message-size 256 \
+    --only-allreduce \
+    --synthetic-data-size $data \
+    > $outdir/${nodes}nodes_${data}data_mxnettree_beta_error.log 2>&1 &
 done
 
 # multitree-beta

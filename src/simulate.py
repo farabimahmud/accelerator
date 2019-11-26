@@ -93,7 +93,7 @@ def init():
         logpath = '{}/results/logs'.format(os.environ['SIMHOME'])
         args.logdir = logpath
     os.system('mkdir -p {}'.format(args.outdir))
-    if args.allreduce == 'multitree':
+    if argsallreduce == 'mxnettree' or args.allreduce == 'multitree':
         if args.radix == 1 and args.message_size != 0:
             logfile = '{}/{}_{}_alpha.log'.format(args.logdir, args.run_name, args.allreduce)
             jsonfile = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
@@ -232,21 +232,21 @@ def main():
     for i, hmc in enumerate(hmcs):
         logger.debug('HMC {}:'.format(i))
         logger.debug('   reduce-scatter-schedule:')
-        assert len(hmc.reduce_scatter_schedule) == 0
         for schedule in hmc.reduce_scatter_schedule:
             logger.debug('       {}'.format(schedule))
+        assert len(hmc.reduce_scatter_schedule) == 0
         logger.debug('   all-gather-schedule:')
-        assert len(hmc.all_gather_schedule) == 0
         for schedule in hmc.all_gather_schedule:
             logger.debug('       {}'.format(schedule))
+        assert len(hmc.all_gather_schedule) == 0
         logger.debug('   from network message buffers:')
         for i, message_buffer in enumerate(hmc.from_network_message_buffers):
-            assert message_buffer.size == 0
             logger.debug('       {}-{}: has {} messages'.format(i, message_buffer.name, message_buffer.size))
+            assert message_buffer.size == 0
         logger.debug('   to network message buffers:')
         for i, message_buffer in enumerate(hmc.to_network_message_buffers):
-            assert message_buffer.size == 0
             logger.debug('       {}-{}: has {} messages'.format(i, message_buffer.name, message_buffer.size))
+            assert message_buffer.size == 0
 
     compute_cycles = hmcs[0].compute_cycles
     allreduce_compute_cycles = 0
@@ -306,7 +306,7 @@ def main():
     sim['results']['power']['network']['link']['static'] = link_leak_power
     sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
 
-    if args.allreduce == 'multitree':
+    if argsallreduce == 'mxnettree' or args.allreduce == 'multitree':
         if args.radix == 1 and args.message_size != 0:
             jsonpath = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
         elif args.radix == 4 and args.message_size != 0:
