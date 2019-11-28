@@ -55,7 +55,7 @@ class MXNetTreeAllreduce(Allreduce):
     '''
     def compute_best_trees(self, trials, kary, alternate=True, sort=True, verbose=False):
         # TODO: this is for torus network, for other networks, it should be changed
-        if self.network.nodes > 16:
+        if self.network.nodes > 16 or self.args.booksim_network == 'mesh':
             self.compute_trees(kary, alternate=alternate, sort=sort, verbose=verbose)
             return
 
@@ -158,7 +158,7 @@ class MXNetTreeAllreduce(Allreduce):
         level = 0
 
         # TODO: the last condition is just for torus
-        while (not self.backtrack) and (not stop or reset) and (self.network.nodes <= 16):
+        while (not self.backtrack) and (not stop or reset) and (self.network.nodes <= 16) and self.args.booksim_network == 'torus':
             if reset:
                 cluster_pairs.clear()
                 partitions_temp = deepcopy(partitions)
@@ -182,7 +182,7 @@ class MXNetTreeAllreduce(Allreduce):
 
         success = True
         if reset:
-            if self.network.nodes > 16:
+            if self.network.nodes > 16 or self.args.booksim_network == 'mesh':
                 if not self.silent:
                     print('No valid tree found from root {} and network too big ({} nodes)'
                             ', compute torus tree'.format(root, self.network.nodes))
@@ -1464,7 +1464,7 @@ class MXNetTreeAllreduce(Allreduce):
         trees = deepcopy(self.conflict_trees)
 
         for node in range(self.network.nodes):
-            self.reduce_scatter_schedule[node] = [{node: ((None, None), self.trees_children[node][node])}]
+            self.reduce_scatter_schedule[node] = [{}, {node: ((None, None), self.trees_children[node][node])}]
             self.all_gather_schedule[node] = [{}]
 
         reduce_scatter_ni = np.zeros(self.network.nodes, dtype=int)

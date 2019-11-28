@@ -1,33 +1,36 @@
 import sys
-import csv
 import numpy as np
 import matplotlib.pyplot as plt
 from easypyplot import pdf, barchart, color
 from easypyplot import format as fmt
+import json
 
 def main(folder_path):
 
-    schemes = ['Ring', 'MXNetTree', 'MultiTree']
+    schemes = ['Ring', 'MXNetTree-$\\beta$', 'MultiTree-$\\gamma$']
+    names = ['ring', 'mxnettree_beta', 'multitree_gamma']
+
+    nodes = [16, 36, 64, 100, 144, 196, 256]
 
     algorithmic_scalability = {}
 
-    alg_scale_file = folder_path + '/algorithmic_scalability.csv'
+    cycles = np.zeros(
+        (int(len(schemes)), int(len(nodes))), dtype=np.float)
 
-    with open(alg_scale_file, 'r') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            algorithmic_scalability[row[0]] = [int(ele) for ele in row[1:]]
+    #get the file names
+    for s, name in enumerate(names):
+        for n, node in enumerate(nodes):
+            data = 98304*node
+            filename = folder_path + '/' + str(node) + 'nodes' + '_' + str(data) + 'data' + '_' + name + '.json'
+            print (filename)
+            with open(filename, 'r') as json_file:
+                sim = json.load(json_file)
+                cycles[s][n] = sim['results']['performance']['total']
 
-    norm_steps = {}
-    for key, value in algorithmic_scalability.items():
-        if key != 'nodes':
-            norm_steps[key] = [float(ele) / algorithmic_scalability['Ring'][0] for ele in value]
-
-    csvfile.close()
+        algorithmic_scalability[name] = [int(ele)/cycles[0][0] for ele in cycles[s]]
 
     plt.rc('legend', fontsize=18)
     plt.rc('font', size=18)
-    plt.rc('text', fontweight='ultralight')
 
     # matlab color palette
     colors = ['#edb120','#d95319','#0071bd']
@@ -38,14 +41,13 @@ def main(folder_path):
     linestyles = ['-', '-', '-']
     markers = ['o', '^', 's']
 
-    figname = folder_path + '/algorithmic_scalability.pdf'
+    figname = folder_path + '/weak_scalability.pdf'
     pdfpage, fig = pdf.plot_setup(figname, figsize=(8, 5), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
-    for s, scheme in enumerate(schemes):
+    for s, scheme in enumerate(names):
         ax.plot(
-                algorithmic_scalability['nodes'],
-                #algorithmic_scalability[scheme],
-                norm_steps[scheme],
+                nodes,
+                algorithmic_scalability[scheme],
                 marker=markers[s],
                 markersize=14,
                 markeredgecolor=colors[s],
@@ -54,12 +56,13 @@ def main(folder_path):
                 color=colors[s],
                 linestyle=linestyles[s],
                 linewidth=3,
-                label=scheme
+                label=schemes[s]
                 )
-        ax.set_xticks(algorithmic_scalability['nodes'])
+        ax.set_xticks(nodes)
         ax.set_xlim(0, 270)
+        ax.set_ylim(0, 18)
         ax.set_xlabel('Number of Nodes in 2D Torus Network')
-        ax.set_ylabel('Normalized Algorithmic Time Steps')
+        ax.set_ylabel('Normalized Runtime')
         ax.yaxis.grid(True, linestyle='--', color='black')
         hdls, lab = ax.get_legend_handles_labels()
         ax.legend(
