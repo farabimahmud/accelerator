@@ -235,6 +235,7 @@ void ScaleTrafficManager::_Step()
   if (flits_in_flight && (_deadlock_timer++ >= _deadlock_warn_timeout)) {
     _deadlock_timer = 0;
     cout << "WARNING: Possible network deadlock.\n";
+    _DisplayRemaining(cout);
   }
 
   vector<map<int, Flit *> > flits(_subnets);

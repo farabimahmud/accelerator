@@ -14,6 +14,7 @@ for nodes in 16 36 64 100 144 196 256
 do
   python $SIMHOME/src/simulate.py \
     --run-name ${nodes}nodes_${data}data \
+    --num-hmcs $nodes \
     --booksim-config $SIMHOME/src/booksim2/runfiles/torus44express.cfg \
     --allreduce ring \
     --outdir $outdir \
@@ -32,6 +33,7 @@ for nodes in 16 36 64 100 144 196 256
 do
   python $SIMHOME/src/simulate.py \
     --run-name ${nodes}nodes_${data}data \
+    --num-hmcs $nodes \
     --booksim-config $SIMHOME/src/booksim2/runfiles/torus44express.cfg \
     --allreduce mxnettree \
     --outdir $outdir \
@@ -50,6 +52,7 @@ for nodes in 16 36 64 100 144 196 256
 do
   python $SIMHOME/src/simulate.py \
     --run-name ${nodes}nodes_${data}data \
+    --num-hmcs $nodes \
     --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
     --allreduce mxnettree \
     --outdir $outdir \
@@ -68,6 +71,7 @@ for nodes in 16 36 64 100 144 196 256
 do
   python $SIMHOME/src/simulate.py \
     --run-name ${nodes}nodes_${data}data \
+    --num-hmcs $nodes \
     --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
     --allreduce multitree \
     --outdir $outdir \
@@ -86,6 +90,7 @@ for nodes in 16 36 64 100 144 196 256
 do
   python $SIMHOME/src/simulate.py \
     --run-name ${nodes}nodes_${data}data \
+    --num-hmcs $nodes \
     --booksim-config $SIMHOME/src/booksim2/runfiles/ctorus44multitree.cfg \
     --allreduce multitree \
     --outdir $outdir \
