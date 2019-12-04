@@ -262,7 +262,8 @@ def main():
     logger.info(' - computation: {} cycles ({:.2f}%)'.format(compute_cycles, compute_percentile))
     logger.info(' - allreduce: {} cycles ({:.2f}%)'.format(allreduce_cycles, allreduce_percentile))
     logger.info('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
-    logger.info('     - pure communication: {} cycles ({:.2f}%)\n'.format(pure_communication_cycles, pure_communication_percentile))
+    logger.info('     - pure communication: {} cycles ({:.2f}%)'.format(pure_communication_cycles, pure_communication_percentile))
+    logger.info('Total number of messages: {}\n'.format(HMC.cur_mid))
 
     assert network.booksim.Idle()
     for i, hmc in enumerate(hmcs):

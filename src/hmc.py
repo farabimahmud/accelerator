@@ -58,7 +58,7 @@ class HMC(SimObject):
         self.cur_mids = np.zeros(self.args.radix, dtype=int)
         for i in range(self.args.radix):
             self.cur_mids[i] = HMC.cur_mid
-            HMC.cur_mid += 1
+            HMC.cur_mid = (HMC.cur_mid + 1) % 2147483647
         self.sending = [None for i in range(self.args.radix)]
         self.free_nis = set([i for i in range(self.args.radix)])
         self.just_allocated_nis = {}
@@ -422,7 +422,7 @@ class HMC(SimObject):
                 continue
             if self.messages_sent[ni] % self.num_sub_messages == 0:
                 self.cur_mids[ni] = HMC.cur_mid
-                HMC.cur_mid += 1
+                HMC.cur_mid = (HMC.cur_mid + 1) % 2147483647
             if self.messages_sent[ni] < self.num_messages * self.num_sub_messages:
                 self.schedule('send-reduce-message', cur_cycle + 1)
             else:
@@ -552,7 +552,7 @@ class HMC(SimObject):
                 continue
             if self.messages_sent[ni] % self.num_sub_messages == 0:
                 self.cur_mids[ni] = HMC.cur_mid
-                HMC.cur_mid += 1
+                HMC.cur_mid = (HMC.cur_mid + 1) % 2147483647
             if self.messages_sent[ni] < self.num_messages * self.num_sub_messages:
                     self.schedule('send-gather-message', cur_cycle + 1)
             else:
