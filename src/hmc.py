@@ -42,7 +42,7 @@ class HMC(SimObject):
 
         self.model = None
         self.bytes_per_param = 4 # bytes
-        self.mini_batch_per_npu = math.ceil(self.args.mini_batch_size / self.args.num_vaults)
+        self.samples_per_npu = math.ceil(self.args.mini_batch_size / (self.args.num_vaults * self.args.num_hmcs))
 
         self.message_size = args.message_size # bytes
         self.sub_message_size = args.sub_message_size
@@ -245,7 +245,8 @@ class HMC(SimObject):
     def finish_training_update(self, cur_cycle):
         assert self.computation_state == 'training-to-idle'
         self.computation_state = 'idle'
-        self.schedule('aggregation', cur_cycle + 1)
+        if self.args.only_compute == False:
+            self.schedule('aggregation', cur_cycle + 1)
         logger.info('{} | {} finishes training, computation sate: {}, communication state: {}'.format(cur_cycle, self.name, self.computation_state, self.communication_state))
     # end of finish_training_update()
 
@@ -681,7 +682,7 @@ class HMC(SimObject):
 
         if HMC.inference_cycles == None:
             npu_cycles = self.npu.inference(self.model)
-            cycles = npu_cycles * self.mini_batch_per_npu
+            cycles = npu_cycles * self.samples_per_npu
             HMC.inference_cycles = cycles
 
         self.compute_cycles += HMC.inference_cycles
@@ -699,7 +700,7 @@ class HMC(SimObject):
 
         if HMC.training_cycles == None:
             npu_cycles = self.npu.train(self.model)
-            cycles = npu_cycles * self.mini_batch_per_npu
+            cycles = npu_cycles * self.samples_per_npu
             HMC.training_cycles = cycles
 
         self.compute_cycles += HMC.training_cycles

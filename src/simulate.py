@@ -47,8 +47,8 @@ def init():
                         help='number of hybrid memory cubes, default=16')
     parser.add_argument('--num-vaults', default=16, type=int,
                         help='number of vaults per hybrid memory cube')
-    parser.add_argument('--mini-batch-size', default=16, type=int,
-                        help='number of mini batch size per hmc accelerator, distributed to all vault npu')
+    parser.add_argument('--mini-batch-size', default=256, type=int,
+                        help='number of mini batch size for all hmc accelerator, distributed to all vault npu of each accelerator')
     parser.add_argument('--network', default='SCALE-Sim/topologies/conv_nets/alexnet.csv',
                         help='neural network architecture topology file, '
                              'default=SCALE-Sim/topologies/conv_nets/alexnet.csv')
@@ -72,6 +72,8 @@ def init():
                         help='Enable logging for a specific module, append module name')
     parser.add_argument('-v', '--verbose', default=False, action='store_true',
                         help='Set the log level to debug, printing out detailed messages during execution.')
+    parser.add_argument('--only-compute', default=False, action='store_true',
+                        help='Set the flag to only run training computation without allreduce')
     parser.add_argument('--only-allreduce', default=False, action='store_true',
                         help='Set the flag to only run allreduce communication')
     parser.add_argument('--message-buffer-size', default=0, type=int,
