@@ -189,6 +189,8 @@ def init():
     allreduce = construct_allreduce(args)
     allreduce.compute_schedule(args.kary)
 
+    assert not (args.only_compute and args.only_allreduce)
+
     hmcs = []
     from_network_message_buffers = []
     to_network_message_buffers = []
@@ -269,9 +271,10 @@ def main():
 
     assert network.booksim.Idle()
     for i, hmc in enumerate(hmcs):
-        assert len(hmc.pending_aggregations) == 0
-        assert len(hmc.reduce_scatter_schedule) == 0
-        assert len(hmc.all_gather_schedule) == 0
+        if not args.only_compute:
+            assert len(hmc.pending_aggregations) == 0
+            assert len(hmc.reduce_scatter_schedule) == 0
+            assert len(hmc.all_gather_schedule) == 0
         for i, message_buffer in enumerate(hmc.from_network_message_buffers):
             assert message_buffer.size == 0
         for i, message_buffer in enumerate(hmc.to_network_message_buffers):
