@@ -106,8 +106,12 @@ def init():
             logfile = '{}/{}_{}_gamma.log'.format(args.logdir, args.run_name, args.allreduce)
             jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
     else:
-        logfile = '{}/{}_{}.log'.format(args.logdir, args.run_name, args.allreduce)
-        jsonfile = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
+        if args.message_size == 0:
+            logfile = '{}/{}_{}_gamma.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+        else:
+            logfile = '{}/{}_{}.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     if os.path.exists(logfile) or os.path.exists(jsonfile):
         raise RuntimeError('Warn: {} or {} already existed, may overwritten'.format(logfile, jsonfile))
 
@@ -325,7 +329,10 @@ def main():
         elif args.radix == 4 and args.message_size == 0:
             jsonpath = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
     else:
-        jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
+        if args.message_size == 0:
+            jsonpath = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+        else:
+            jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     with open(jsonpath, 'w') as simfile:
         json.dump(sim, simfile, indent=4)
         simfile.close()
