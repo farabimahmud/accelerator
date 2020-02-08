@@ -24,6 +24,16 @@ class Network(ABC):
         pass
 
 
+    '''
+    distance() - distance between two nodes
+    @src: source node ID
+    @dest: destination node ID
+    '''
+    @abstractmethod
+    def distance(self, src, dest):
+        pass
+
+
 from kncube import KNCube
 
 

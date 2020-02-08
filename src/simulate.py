@@ -59,7 +59,7 @@ def init():
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
     parser.add_argument('--allreduce', default='multitree',
-                        help='allreduce shedule (multitree or mxnettree or ring), default=multitree')
+                        help='allreduce shedule (multitree or mxnettree or ring or dtree), default=multitree')
     parser.add_argument('-k', '--kary', default=2, type=int,
                         help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--radix', default=4, type=int,

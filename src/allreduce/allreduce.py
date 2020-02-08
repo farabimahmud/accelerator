@@ -277,6 +277,7 @@ sys.path.append('{}/src/allreduce/network'.format(os.environ['SIMHOME']))
 
 from network import construct_network
 from ring_allreduce import RingAllreduce
+from dtree_allreduce import DTreeAllreduce
 from multitree_allreduce import MultiTreeAllreduce
 from mxnettree_allreduce import MXNetTreeAllreduce
 
@@ -300,6 +301,8 @@ def construct_allreduce(args):
         allreduce = MXNetTreeAllreduce(args, network)
     elif args.allreduce == 'ring':
         allreduce = RingAllreduce(args, network)
+    elif args.allreduce ==  'dtree':
+        allreduce = DTreeAllreduce(args, network)
     else:
         raise RuntimeError('Unknow allreduce schedule: ' + args.allreduce)
 
