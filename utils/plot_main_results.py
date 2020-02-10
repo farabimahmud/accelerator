@@ -25,8 +25,8 @@ def main(folder_path):
 
     benchmarks = ['alexnet', 'AlphaGoZero', 'FasterRCNN', 'Googlenet', 'NCF_recommendation',
             'Resnet50', 'Transformer']
-    names = ['ring', 'mxnettree_alpha', 'mxnettree_beta', 'multitree_alpha', 'multitree_beta', 'multitree_gamma']
-    schemes = ['Ring', 'MXNetTree-$\\alpha$', 'MXNettree-$\\beta$', 'MultiTree-$\\alpha$', 'MultiTree-$\\beta$', 'MultiTree-$\\gamma$']
+    names = ['ring', 'ring_gamma', 'dtree', 'mxnettree_alpha', 'mxnettree_beta', 'multitree_alpha', 'multitree_beta', 'multitree_gamma']
+    schemes = ['Ring', 'Ring-$\\gamma$', '2Tree', 'MXNetTree-$\\alpha$', 'MXNettree-$\\beta$', 'MultiTree-$\\alpha$', 'MultiTree-$\\beta$', 'MultiTree-$\\gamma$']
 
     entry_names = ['Allreduce', 'Training']
     energy_entry_names = ['Dynamic', 'Static']
@@ -144,6 +144,8 @@ def main(folder_path):
 
     colors = ['#e0f3db','#a8ddb5','#43a2ca', '#e0f3db','#a8ddb5','#43a2ca']
     colors = ['#f0f9e8','#ccebc5','#a8ddb5','#7bccc4','#43a2ca','#0868ac']
+    colors = ['#f0f9e8','#ccebc5','#a8ddb5','#7bccc4','#4eb3d3','#2b8cbe','#08589e']
+    colors = ['#f7fcf0','#e0f3db','#ccebc5','#a8ddb5','#7bccc4','#4eb3d3','#2b8cbe','#08589e']
     plt.rc('legend', fontsize=22)
     plt.rc('font', size=18)
 
@@ -171,7 +173,7 @@ def main(folder_path):
         schemes,
         loc='upper center',
         bbox_to_anchor=(0.5, 1.25),
-        ncol=len(schemes),
+        ncol=4,
         frameon=False,
         handletextpad=0.6,
         columnspacing=1)
@@ -237,9 +239,9 @@ def main(folder_path):
     # generate x position for allreduce
     xs = []
     p = 0.0
-    for g in range(7):
+    for g in range(len(benchmarks)):
         xs.append([])
-        for pos in range(6):
+        for pos in range(len(names)):
             xs[g].append(p)
             p = p + 1
         p = p + 1
