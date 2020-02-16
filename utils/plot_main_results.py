@@ -210,6 +210,7 @@ def main(folder_path):
         log=False)
     ax.set_ylabel('Normalized Runtime Breakdown')
     ax.yaxis.grid(True, linestyle='--')
+    ax.set_ylim(0, 3)
     fmt.resize_ax_box(ax, hratio=0.78)
     ly = len(benchmarks)
     scale = 1. / ly
@@ -250,7 +251,8 @@ def main(folder_path):
     data = np.array(data, dtype=np.float64)
     ax2.set_ylim(0, 3)
     ax2.set_ylabel('Allreduce Speedup')
-    for i in range(7):
+    fmt.resize_ax_box(ax2, hratio=0.78)
+    for i in range(len(benchmarks)):
         tmp = ax2.plot(xs[i], data[i], '-o', markersize=8, color='black', markeredgecolor='#4b4a25')
         if i == 0:
             hdls += tmp
