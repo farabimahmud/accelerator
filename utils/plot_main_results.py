@@ -25,8 +25,8 @@ def main(folder_path):
 
     benchmarks = ['alexnet', 'AlphaGoZero', 'FasterRCNN', 'Googlenet', 'NCF_recommendation',
             'Resnet50', 'Transformer']
-    names = ['ring', 'mxnettree_alpha', 'mxnettree_beta', 'multitree_alpha', 'multitree_beta', 'multitree_gamma']
-    schemes = ['Ring', 'MXNetTree-$\\alpha$', 'MXNettree-$\\beta$', 'MultiTree-$\\alpha$', 'MultiTree-$\\beta$', 'MultiTree-$\\gamma$']
+    names = ['ring', 'ring_gamma', 'dtree', 'mxnettree_alpha', 'mxnettree_beta', 'multitree_alpha', 'multitree_beta', 'multitree_gamma']
+    schemes = ['Ring', 'Ring-$\\gamma$', '2Tree', 'MXNetTree-$\\alpha$', 'MXNettree-$\\beta$', 'MultiTree-$\\alpha$', 'MultiTree-$\\beta$', 'MultiTree-$\\gamma$']
 
     entry_names = ['Allreduce', 'Training']
     energy_entry_names = ['Dynamic', 'Static']
@@ -144,6 +144,8 @@ def main(folder_path):
 
     colors = ['#e0f3db','#a8ddb5','#43a2ca', '#e0f3db','#a8ddb5','#43a2ca']
     colors = ['#f0f9e8','#ccebc5','#a8ddb5','#7bccc4','#43a2ca','#0868ac']
+    colors = ['#f0f9e8','#ccebc5','#a8ddb5','#7bccc4','#4eb3d3','#2b8cbe','#08589e']
+    colors = ['#f7fcf0','#e0f3db','#ccebc5','#a8ddb5','#7bccc4','#4eb3d3','#2b8cbe','#08589e']
     plt.rc('legend', fontsize=22)
     plt.rc('font', size=18)
 
@@ -171,48 +173,15 @@ def main(folder_path):
         schemes,
         loc='upper center',
         bbox_to_anchor=(0.5, 1.25),
-        ncol=len(schemes),
+        ncol=4,
         frameon=False,
         handletextpad=0.6,
         columnspacing=1)
     fmt.resize_ax_box(ax, hratio=0.8)
     pdf.plot_teardown(pdfpage)
-
-    data = [list(i) for i in zip(*allreduce_speedup)]
-    data = np.array(data, dtype=np.float64)
-    #fig = plt.figure(figsize=(8, 5.5))
-    figpath = folder_path + '/allreduce_speedup.pdf'
-    pdfpage, fig = pdf.plot_setup(figpath, figsize=(8, 6), fontsize=22, font=('family', 'Tw Cen MT'))
-    ax = fig.gca()
-    hdls = barchart.draw(
-        ax,
-        data,
-        group_names=xlabels,
-        entry_names=schemes,
-        colors=colors,
-        breakdown=False,
-        legendloc='upper center',
-        legendncol=len(schemes))
-    fig.autofmt_xdate()
-    #ax.set_ylim(0, 20)
-    ax.yaxis.grid(True, linestyle='--')
-    ax.set_ylabel('Allreduce Speedup')
-    ax.legend(
-        hdls,
-        schemes,
-        loc='upper center',
-        bbox_to_anchor=(0.5, 1.4),
-        ncol=3,
-        frameon=False,
-        handletextpad=0.1,
-        columnspacing=0.5)
-    pos = ax.get_position()
-    pos.y0 = 0.3
-    ax.set_position(pos)
-    fmt.resize_ax_box(ax, hratio=0.85, to_bottom=True)
-    pdf.plot_teardown(pdfpage)
-
+    ##############################
     # normalized runtime breakdown
+    ##############################
     #colors = ['#8faadc', '#e2f0d9', '#f4b183']
     colors = ['#2b8cbe', '#e2f0d9', '#f4b183']
     xticks = []
@@ -224,6 +193,7 @@ def main(folder_path):
     figpath = folder_path + '/norm_runtime.pdf'
     pdfpage, fig = pdf.plot_setup(figpath, figsize=(30, 8), fontsize=26, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
+    ax2 = ax.twinx()  # ax for allreduce speedup
     hdls = barchart.draw(
         ax,
         data,
@@ -240,15 +210,7 @@ def main(folder_path):
         log=False)
     ax.set_ylabel('Normalized Runtime Breakdown')
     ax.yaxis.grid(True, linestyle='--')
-    ax.legend(
-        hdls,
-        entry_names,
-        loc='upper center',
-        bbox_to_anchor=(0.5, 1.18),
-        ncol=len(entry_names),
-        frameon=False,
-        handletextpad=0.6,
-        columnspacing=1)
+    ax.set_ylim(0, 3)
     fmt.resize_ax_box(ax, hratio=0.78)
     ly = len(benchmarks)
     scale = 1. / ly
@@ -260,6 +222,51 @@ def main(folder_path):
             ax.text(
                 lxpos, ypos, xlabels[pos], ha='center', transform=ax.transAxes)
         add_line(ax, pos * scale, ypos)
+
+
+
+    #############################
+    # All reduce speedup
+    #############################
+    #[       [1.         0.4994861  1.32979743 0.6254262  1.9101432  2.5267156 ]
+    #        [1.         0.51647551 1.39716977 0.61125715 1.87302411 2.5307805 ]
+    #        [1.         0.53101313 1.37975687 0.59869921 1.9078746  2.524382  ]
+    #        [1.         0.53116167 1.27836285 0.60494638 1.93217098 2.52539887]
+    #        [1.         0.4747683  1.38020831 0.61143355 1.90264861 2.52471041]
+    #        [1.         0.53600642 1.23278946 0.62154002 1.85625354 2.52383927]
+    #        [1.         0.55971783 1.34595079 0.60816199 1.95166229 2.52353277]
+    #        [1.         0.52059946 1.33367677 0.61157805 1.9045867  2.52562171]]
+
+    # generate x position for allreduce
+    xs = []
+    p = 0.0
+    for g in range(len(benchmarks)):
+        xs.append([])
+        for pos in range(len(names)):
+            xs[g].append(p)
+            p = p + 1
+        p = p + 1
+
+    data = [list(i) for i in zip(*allreduce_speedup)]
+    data = np.array(data, dtype=np.float64)
+    ax2.set_ylim(0, 3)
+    ax2.set_ylabel('Allreduce Speedup')
+    fmt.resize_ax_box(ax2, hratio=0.78)
+    for i in range(len(benchmarks)):
+        tmp = ax2.plot(xs[i], data[i], '-o', markersize=8, color='black', markeredgecolor='#4b4a25')
+        if i == 0:
+            hdls += tmp
+    ax.legend(
+        hdls,
+        entry_names + ['Allreduce Speedup'],
+        loc='upper center',
+        bbox_to_anchor=(0.5, 1.18),
+        #bbox_to_anchor=(0.5, 1.1),
+        ncol=len(entry_names)+1,
+        frameon=False,
+        handletextpad=0.6,
+        columnspacing=1)
+
     pdf.plot_teardown(pdfpage)
 
     # normalized power breakdown

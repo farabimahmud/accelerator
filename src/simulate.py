@@ -47,8 +47,8 @@ def init():
                         help='number of hybrid memory cubes, default=16')
     parser.add_argument('--num-vaults', default=16, type=int,
                         help='number of vaults per hybrid memory cube')
-    parser.add_argument('--mini-batch-size', default=16, type=int,
-                        help='number of mini batch size per hmc accelerator, distributed to all vault npu')
+    parser.add_argument('--mini-batch-size', default=256, type=int,
+                        help='number of mini batch size for all hmc accelerator, distributed to all vault npu of each accelerator')
     parser.add_argument('--network', default='SCALE-Sim/topologies/conv_nets/alexnet.csv',
                         help='neural network architecture topology file, '
                              'default=SCALE-Sim/topologies/conv_nets/alexnet.csv')
@@ -59,7 +59,7 @@ def init():
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
     parser.add_argument('--allreduce', default='multitree',
-                        help='allreduce shedule (multitree or mxnettree or ring), default=multitree')
+                        help='allreduce shedule (multitree or mxnettree or ring or dtree), default=multitree')
     parser.add_argument('-k', '--kary', default=2, type=int,
                         help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--radix', default=4, type=int,
@@ -72,6 +72,8 @@ def init():
                         help='Enable logging for a specific module, append module name')
     parser.add_argument('-v', '--verbose', default=False, action='store_true',
                         help='Set the log level to debug, printing out detailed messages during execution.')
+    parser.add_argument('--only-compute', default=False, action='store_true',
+                        help='Set the flag to only run training computation without allreduce')
     parser.add_argument('--only-allreduce', default=False, action='store_true',
                         help='Set the flag to only run allreduce communication')
     parser.add_argument('--message-buffer-size', default=0, type=int,
@@ -104,8 +106,12 @@ def init():
             logfile = '{}/{}_{}_gamma.log'.format(args.logdir, args.run_name, args.allreduce)
             jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
     else:
-        logfile = '{}/{}_{}.log'.format(args.logdir, args.run_name, args.allreduce)
-        jsonfile = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
+        if args.message_size == 0:
+            logfile = '{}/{}_{}_gamma.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+        else:
+            logfile = '{}/{}_{}.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     if os.path.exists(logfile) or os.path.exists(jsonfile):
         raise RuntimeError('Warn: {} or {} already existed, may overwritten'.format(logfile, jsonfile))
 
@@ -187,6 +193,8 @@ def init():
     allreduce = construct_allreduce(args)
     allreduce.compute_schedule(args.kary)
 
+    assert not (args.only_compute and args.only_allreduce)
+
     hmcs = []
     from_network_message_buffers = []
     to_network_message_buffers = []
@@ -262,13 +270,15 @@ def main():
     logger.info(' - computation: {} cycles ({:.2f}%)'.format(compute_cycles, compute_percentile))
     logger.info(' - allreduce: {} cycles ({:.2f}%)'.format(allreduce_cycles, allreduce_percentile))
     logger.info('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
-    logger.info('     - pure communication: {} cycles ({:.2f}%)\n'.format(pure_communication_cycles, pure_communication_percentile))
+    logger.info('     - pure communication: {} cycles ({:.2f}%)'.format(pure_communication_cycles, pure_communication_percentile))
+    logger.info('Total number of messages: {}\n'.format(HMC.cur_mid))
 
     assert network.booksim.Idle()
     for i, hmc in enumerate(hmcs):
-        assert len(hmc.pending_aggregations) == 0
-        assert len(hmc.reduce_scatter_schedule) == 0
-        assert len(hmc.all_gather_schedule) == 0
+        if not args.only_compute:
+            assert len(hmc.pending_aggregations) == 0
+            assert len(hmc.reduce_scatter_schedule) == 0
+            assert len(hmc.all_gather_schedule) == 0
         for i, message_buffer in enumerate(hmc.from_network_message_buffers):
             assert message_buffer.size == 0
         for i, message_buffer in enumerate(hmc.to_network_message_buffers):
@@ -319,7 +329,10 @@ def main():
         elif args.radix == 4 and args.message_size == 0:
             jsonpath = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
     else:
-        jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
+        if args.message_size == 0:
+            jsonpath = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+        else:
+            jsonpath = '{}/{}_{}.json'.format(args.logdir, args.run_name, args.allreduce)
     with open(jsonpath, 'w') as simfile:
         json.dump(sim, simfile, indent=4)
         simfile.close()

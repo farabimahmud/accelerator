@@ -105,6 +105,31 @@ class KNCube(Network):
     # def build_graph(self, filename=None)
 
 
+    '''
+    distance() - distance between two nodes
+    @src: source node ID
+    @dest: destination node ID
+    '''
+    def distance(self, src, dest):
+        src_x = src // self.dimension
+        src_y = src % self.dimension
+        dest_x = dest // self.dimension
+        dest_y = dest % self.dimension
+        if self.mesh:
+            dist = abs(src_x - dest_x) + abs(dest_x - dest_y)
+        else:
+            dist_x = abs(src_x - dest_x)
+            dist_y = abs(src_y - dest_y)
+            if dist_x > self.dimension // 2:
+                dist_x = self.dimension - dist_x
+            if dist_y > self.dimension // 2:
+                dist_y = self.dimension - dist_y
+            dist = dist_x + dist_y
+
+        return dist
+    # end of distance()
+
+
 def test():
     dimension = 4
     nodes = dimension * dimension
