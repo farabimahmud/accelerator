@@ -357,7 +357,7 @@ void dor_ctorus(const Router *r, const Flit *f, int in_channel, OutputSet
   if (f->watch) {
     if (!inject) {
       *gWatchOut << GetSimTime() << " | " << r->FullName() << " | "
-        << "Adding VC range" << vcBegin << "," << vcEnd << "]"
+        << "Adding VC range [" << vcBegin << "," << vcEnd << "]"
         << " at output port " << out_port
         << " for flit " << f->id
         << " (input port " << in_channel
@@ -366,8 +366,8 @@ void dor_ctorus(const Router *r, const Flit *f, int in_channel, OutputSet
         << ", destination " << f->dest
         << ", destination router " << CKNCube::NodeToRouter(f->dest) << ")." << endl;
     } else {
-      *gWatchOut << GetSimTime() << " | " << r->FullName() << " | "
-        << "Adding VC range" << vcBegin << "," << vcEnd << "]"
+      *gWatchOut << GetSimTime() << " | node" << f->src << " | (inject) "
+        << "Adding VC range [" << vcBegin << "," << vcEnd << "]"
         << " at output port " << out_port
         << " for flit " << f->id
         << " (source " << f->src

@@ -17,6 +17,16 @@ BookSim::BookSim(string const & configfile)
   }
   cout << "End BookSim Configuration File: " << configfile << endl;
 
+  if (const char* srcpath = std::getenv("BOOKSIMSRC")) {
+    _config->AddStrField("dsent_router_config", string(srcpath) +
+        "/dsent/configs/dsent_router.cfg");
+    _config->AddStrField("dsent_link_config", string(srcpath) +
+        "/dsent/configs/dsent_link.cfg");
+  } else {
+    cout << "Error: Evironment not set up, source setup_env.sh!" << endl;
+    exit(-1);
+  }
+
   // initialize routing and global variables
   InitializeRoutingMap(*_config);
 
