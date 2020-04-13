@@ -1464,7 +1464,8 @@ class MXNetTreeAllreduce(Allreduce):
         trees = deepcopy(self.conflict_trees)
 
         for node in range(self.network.nodes):
-            self.reduce_scatter_schedule[node] = [{}, {node: ((None, None), self.trees_children[node][node])}]
+            flow_children = [(node, child) for child in self.trees_children[node][node]]
+            self.reduce_scatter_schedule[node] = [{}, {node: ((None, None), flow_children, 0)}]
             self.all_gather_schedule[node] = [{}]
 
         reduce_scatter_ni = np.zeros(self.network.nodes, dtype=int)
@@ -1478,10 +1479,14 @@ class MXNetTreeAllreduce(Allreduce):
                     child_parent_row = trees[root].pop()
                     for child, parent in child_parent_row:
                         # TODO: It seems dict is ordered by key in python implementation, may optimize later
-                        self.reduce_scatter_schedule[child][0][root] = ((parent, reduce_scatter_ni[parent]), self.trees_children[root][child])
+                        flow_children = [(root, child) for child in self.trees_children[root][child]]
+                        self.reduce_scatter_schedule[child][0][root] = ((parent, reduce_scatter_ni[parent]), flow_children, 1)
                         reduce_scatter_ni[parent] = (reduce_scatter_ni[parent] + 1) % self.args.radix
                         if root not in self.all_gather_schedule[parent][0].keys():
-                            self.all_gather_schedule[parent][0][root] = ([], self.trees_parent[root][parent])
+                            if self.trees_parent[root][parent] == None:
+                                self.all_gather_schedule[parent][0][root] = ([], None, 1)
+                            else:
+                                self.all_gather_schedule[parent][0][root] = ([], (root, self.trees_parent[root][parent]), 1)
                         self.all_gather_schedule[parent][0][root][0].append((child, all_gather_ni[child]))
                         all_gather_ni[child] = (all_gather_ni[child] + 1) % self.args.radix
                         change = True
