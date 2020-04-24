@@ -4,8 +4,14 @@ from network import Network
 
 class KNCube(Network):
     def __init__(self, args, mesh=False):
-        self.mesh = mesh
         super().__init__(args)
+        self.mesh = mesh
+        self.dimension = int(math.sqrt(self.nodes))
+        assert args.nodes == self.dimension * self.dimension
+        if mesh == True:
+            self.type = 'Mesh'
+        else:
+            self.type = 'Torus'
 
 
     '''

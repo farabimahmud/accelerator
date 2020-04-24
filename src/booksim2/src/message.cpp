@@ -8,7 +8,8 @@ ostream& operator<<(ostream &os, const Message &m)
   os << "  Message ID: " << m.id << " (" << &m << ")"
     << " Type: " << Message::MessageTypeToString(m.type)
     << " SubType: " << Message::SubMessageTypeToString(m.subtype)
-    << " Size: " << m.size << endl;
+    << " Size: " << m.size
+    << " End: " << m.end << endl;
   os << "  Flow: " << m.flow << " Source: " << m.src << "  Dest: " << m.dest
     << "  vnet: " << m.vnet << endl;
 
@@ -20,7 +21,7 @@ Message::Message()
   Reset();
 }
 
-void Message::Set(MessageType type_, SubMessageType subtype_, int id_, int flow_, int src_, int dest_, int size_)
+void Message::Set(MessageType type_, SubMessageType subtype_, int id_, int flow_, int src_, int dest_, int size_, bool end_)
 {
   type = type_;
   subtype = subtype_;
@@ -30,6 +31,7 @@ void Message::Set(MessageType type_, SubMessageType subtype_, int id_, int flow_
   src = src_;
   dest = dest_;
   size = size_;
+  end = end_;
 }
 
 void Message::Reset()
@@ -42,6 +44,7 @@ void Message::Reset()
   src = -1;
   dest = -1;
   size = -1;
+  end = false;
 }
 
 
@@ -59,7 +62,7 @@ Message * Message::New() {
   return m;
 }
 
-Message * Message::New(MessageType type, SubMessageType subtype, int id, int flow, int src, int dest, int size)
+Message * Message::New(MessageType type, SubMessageType subtype, int id, int flow, int src, int dest, int size, bool end)
 {
   Message * m;
   if (_free.empty()) {
@@ -69,7 +72,7 @@ Message * Message::New(MessageType type, SubMessageType subtype, int id, int flo
     m = _free.top();
     _free.pop();
   }
-  m->Set(type, subtype, id, flow, src, dest, size);
+  m->Set(type, subtype, id, flow, src, dest, size, end);
 
   return m;
 }

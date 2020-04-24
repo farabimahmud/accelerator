@@ -10,7 +10,7 @@ from network import construct_network
 from allreduce import Allreduce
 
 
-class MultiTreeAllreduce(Allreduce):
+class MultiTree2Allreduce(Allreduce):
     def __init__(self, args, network):
         super().__init__(args, network)
 
@@ -26,6 +26,7 @@ class MultiTreeAllreduce(Allreduce):
     '''
     def compute_trees(self, kary, alternate=True, sort=False, verbose=False):
         assert kary > 1
+        assert self.network.type == 'BiGraph'
 
         # initialize empty trees
         self.trees = {}
@@ -48,7 +49,9 @@ class MultiTreeAllreduce(Allreduce):
             if verbose:
                 print('timestep {}'.format(self.timesteps))
 
-            from_nodes = deepcopy(self.network.from_nodes)
+            node_to_switch = deepcopy(self.network.node_to_switch)
+            switch_to_switch = deepcopy(self.network.switch_to_switch)
+            switch_to_node = deepcopy(self.network.switch_to_node)
             last_tree_nodes = deepcopy(tree_nodes)
 
             # alternating the link allocation every time for each tree
@@ -75,26 +78,63 @@ class MultiTreeAllreduce(Allreduce):
 
                     if len(tree_nodes[root]) < self.network.nodes:
                         for parent in last_tree_nodes[root]:
-                            children = deepcopy(from_nodes[parent])
-                            if num_new_children[root][parent] == kary - 1:
-                                conflicts[root] += 1
+                            if parent not in node_to_switch.keys():
                                 continue
-                            for child in children:
-                                if child not in tree_nodes[root]:
-                                    num_new_children[root][parent] += 1
-                                    if verbose:
-                                        print(' -- add node {} to tree {}'.format(child, root))
-                                        print('    before: {}'.format(self.trees[root]))
-                                    from_nodes[parent].remove(child)
-                                    tree_nodes[root].append(child)
-                                    self.trees[root].append((child, parent, self.timesteps))
-                                    if verbose:
-                                        print('    after : {}'.format(self.trees[root]))
-                                        print('    tree nodes: {}'.format(tree_nodes[root]))
-                                    changed = True
-                                    break
-                                else:
-                                    conflicts[root] += 1
+                            switch = node_to_switch[parent][0]
+                            # first check nodes on same switch
+                            if switch in switch_to_node.keys():
+                                children = deepcopy(switch_to_node[switch])
+                                for child in children:
+                                    if child not in tree_nodes[root]:
+                                        num_new_children[root][parent] += 1
+                                        if verbose:
+                                            print(' -- add node {} to tree {} (connected to parent {} on same switch {})'.format(child, root, parent, switch))
+                                            print('    before: {}'.format(self.trees[root]))
+                                        node_to_switch[parent] = (switch, node_to_switch[parent][1] - 1)
+                                        if node_to_switch[parent][1] == 0:
+                                            node_to_switch.pop(parent, None)
+                                        switch_to_node[switch].remove(child)
+                                        if not switch_to_node[switch]:
+                                            switch_to_node.pop(switch, None)
+                                        tree_nodes[root].append(child)
+                                        self.trees[root].append((child, parent, self.timesteps))
+                                        if verbose:
+                                            print('    after : {}'.format(self.trees[root]))
+                                            print('    tree nodes: {}'.format(tree_nodes[root]))
+                                        changed = True
+                                        break
+                                    else:
+                                        conflicts[root] += 1
+                            # check one hop distant nodes
+                            if changed == False:
+                                neighbor_switches = deepcopy(switch_to_switch[switch])
+                                for neighbor_sw in neighbor_switches:
+                                    if neighbor_sw in switch_to_node.keys():
+                                        children = deepcopy(switch_to_node[neighbor_sw])
+                                        for child in children:
+                                            if child not in tree_nodes[root]:
+                                                num_new_children[root][parent] += 1
+                                                if verbose:
+                                                    print(' -- add node {} ( with switch {}) to tree {} (connected to parent {} on neighbor switch {})'.format(child, neighbor_sw, root, parent, switch))
+                                                    print('    before: {}'.format(self.trees[root]))
+                                                node_to_switch[parent] = (switch, node_to_switch[parent][1] - 1)
+                                                if node_to_switch[parent][1] == 0:
+                                                    node_to_switch.pop(parent, None)
+                                                switch_to_node[neighbor_sw].remove(child)
+                                                if not switch_to_node[neighbor_sw]:
+                                                    switch_to_node.pop(neighbor_sw, None)
+                                                switch_to_switch[switch].remove(neighbor_sw)
+                                                tree_nodes[root].append(child)
+                                                self.trees[root].append((child, parent, self.timesteps))
+                                                if verbose:
+                                                    print('    after : {}'.format(self.trees[root]))
+                                                    print('    tree nodes: {}'.format(tree_nodes[root]))
+                                                changed = True
+                                                break
+                                            else:
+                                                conflicts[root] += 1
+                                        if changed:
+                                            break
                             if changed:
                                 break
 
@@ -265,13 +305,12 @@ class MultiTreeAllreduce(Allreduce):
 
 
 def test(args):
-    args.num_hmcs = int(args.dimension * args.dimension)
     network = construct_network(args)
 
     kary = args.kary
-    allreduce = MultiTreeAllreduce(args, network)
+    allreduce = MultiTree2Allreduce(args, network)
     # NOTE: sorted doesn't help for multitree since it only considers available links
-    allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
+    allreduce.compute_trees(kary, alternate=True, sort=False, verbose=True)
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree.dot')
     timesteps = allreduce.timesteps
@@ -296,16 +335,20 @@ def test(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dimension', default=4, type=int,
-                        help='network dimension, default is 4')
+    parser.add_argument('--num-hmcs', default=32, type=int,
+                        help='number of nodes, default is 32')
     parser.add_argument('--kary', default=2, type=int,
                         help='generay kary tree, default is 2 (binary)')
     parser.add_argument('--radix', default=4, type=int,
                         help='node radix, default is 4')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
-    parser.add_argument('--booksim-network', default='torus',
-                        help='network topology (torus | mesh), default is torus')
+    parser.add_argument('--bigraph-m', default=4, type=int,
+                        help='logical groups size (# sub-node per switch')
+    parser.add_argument('--bigraph-n', default=8, type=int,
+                        help='# switches')
+    parser.add_argument('--booksim-network', default='bigraph',
+                        help='network topology (torus | mesh | bigraph), default is torus')
 
     args = parser.parse_args()
 

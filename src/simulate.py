@@ -59,7 +59,7 @@ def init():
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
     parser.add_argument('--allreduce', default='multitree',
-                        help='allreduce shedule (multitree or mxnettree or ring or dtree), default=multitree')
+                        help='allreduce shedule (multitree|mxnettree|ring|dtree|hdrm|multitree2), default=multitree')
     parser.add_argument('-k', '--kary', default=2, type=int,
                         help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--radix', default=4, type=int,
@@ -67,7 +67,11 @@ def init():
     parser.add_argument('--booksim-config', default='', required=True,
                         help='required config file for booksim')
     parser.add_argument('--booksim-network', default='torus',
-                        help='network topology (torus | mesh), default is torus')
+                        help='network topology (torus|mesh|bigraph), default is torus')
+    parser.add_argument('--bigraph-m', default=4, type=int,
+                        help='logical groups size (# sub-node per switch) in BiGraph')
+    parser.add_argument('--bigraph-n', default=8, type=int,
+                        help='# switches in BiGraph topology')
     parser.add_argument('-l', '--enable-logger', default=[], action='append',
                         help='Enable logging for a specific module, append module name')
     parser.add_argument('-v', '--verbose', default=False, action='store_true',
@@ -191,7 +195,7 @@ def init():
                     ' infinite)'.format(msg_buf_size, inject_buf_size))
 
     allreduce = construct_allreduce(args)
-    allreduce.compute_schedule(args.kary)
+    allreduce.compute_schedule(args.kary, verbose=True)
 
     assert not (args.only_compute and args.only_allreduce)
 
@@ -271,7 +275,11 @@ def main():
     logger.info(' - allreduce: {} cycles ({:.2f}%)'.format(allreduce_cycles, allreduce_percentile))
     logger.info('     - overlapped computation: {} cycles ({:.2f}%)'.format(allreduce_compute_cycles, allreduce_compute_percentile))
     logger.info('     - pure communication: {} cycles ({:.2f}%)'.format(pure_communication_cycles, pure_communication_percentile))
-    logger.info('Total number of messages: {}\n'.format(HMC.cur_mid))
+    total_messages_sent = 0
+    for i, hmc in enumerate(hmcs):
+        logger.debug(' - HMC {} sends {} messages'.format(i, hmc.total_messages_sent))
+        total_messages_sent += hmc.total_messages_sent
+    logger.info('Total number of messeges: {}\n'.format(total_messages_sent))
 
     assert network.booksim.Idle()
     for i, hmc in enumerate(hmcs):

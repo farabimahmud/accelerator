@@ -48,6 +48,7 @@
 #include "anynet.hpp"
 #include "dragonfly.hpp"
 #include "ckncube.hpp"
+#include "bigraph.hpp"
 
 
 Network::Network( const Configuration &config, const string & name ) :
@@ -115,6 +116,9 @@ Network * Network::New(const Configuration & config, const string & name)
   } else if (topo == "ctorus") {
     CKNCube::RegisterRoutingFunctions();
     n = new CKNCube(config, name, false);
+  } else if (topo == "bigraph") {
+    BiGraph::RegisterRoutingFunctions();
+    n = new BiGraph(config, name);
   } else {
     cerr << "Unknown topology: " << topo << endl;
   }

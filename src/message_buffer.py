@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Message:
-    def __init__(self, flow, mid, src, dest, size, msgtype, submsgtype):
+    def __init__(self, flow, mid, src, dest, size, msgtype, submsgtype, end=False):
         self.flow = flow
         self.id = mid
         self.src = src
@@ -12,6 +12,7 @@ class Message:
         self.size = size
         self.type = msgtype
         self.submsgtype = submsgtype
+        self.end = end
 
 
 class MessageBuffer:

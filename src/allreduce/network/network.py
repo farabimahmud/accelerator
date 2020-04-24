@@ -7,8 +7,7 @@ from abc import ABC, abstractmethod
 class Network(ABC):
     def __init__(self, args):
         self.args = args
-        self.nodes = args.dimension * args.dimension
-        self.dimension = args.dimension
+        self.nodes = args.nodes
         self.from_nodes = {}
         self.to_nodes = {}
         self.edges = []
@@ -35,6 +34,7 @@ class Network(ABC):
 
 
 from kncube import KNCube
+from bigraph import BiGraph
 
 
 '''
@@ -44,15 +44,15 @@ construct_network() - construct a network
 return: a network object
 '''
 def construct_network(args):
-    dimension = int(math.sqrt(args.num_hmcs))
-    assert args.num_hmcs == dimension * dimension
-    args.dimension = dimension
+    args.nodes = args.num_hmcs
     network = None
 
     if args.booksim_network == 'mesh':
         network = KNCube(args, mesh=True)
     elif args.booksim_network == 'torus':
         network = KNCube(args)
+    elif args.booksim_network == 'bigraph':
+        network = BiGraph(args)
     else:
         raise RuntimeError('Unknown network topology: ' + args.booksim_network)
 

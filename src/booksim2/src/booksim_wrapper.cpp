@@ -17,6 +17,16 @@ BookSim::BookSim(string const & configfile)
   }
   cout << "End BookSim Configuration File: " << configfile << endl;
 
+  if (const char* srcpath = std::getenv("BOOKSIMSRC")) {
+    _config->AddStrField("dsent_router_config", string(srcpath) +
+        "/dsent/configs/dsent_router.cfg");
+    _config->AddStrField("dsent_link_config", string(srcpath) +
+        "/dsent/configs/dsent_link.cfg");
+  } else {
+    cout << "Error: Evironment not set up, source setup_env.sh!" << endl;
+    exit(-1);
+  }
+
   // initialize routing and global variables
   InitializeRoutingMap(*_config);
 
@@ -74,14 +84,14 @@ BookSim::~BookSim() {
   if (_power_model) delete _power_model;
 }
 
-int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type, Message::SubMessageType subtype)
+int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type, Message::SubMessageType subtype, bool end)
 {
   if (id == -1) {
     assert(subtype == Message::Head || subtype == Message::HeadTail);
     id = _cur_mid;
   }
 
-  Message *message = Message::New(type, subtype, id, flow, src, dest, msg_size);
+  Message *message = Message::New(type, subtype, id, flow, src, dest, msg_size, end);
   if (_traffic_manager->Enqueue(message)) {
     _outstanding_messages++;
     // only increment the global message ID for head or head_tail submessage
@@ -101,17 +111,19 @@ int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Me
   return id;
 }
 
-tuple<int, int, Message::MessageType> BookSim::PeekMessage(int node, int vnet)
+tuple<int, int, Message::MessageType, bool> BookSim::PeekMessage(int node, int vnet)
 {
   int flow = -1;
   int src = -1;
   Message::MessageType type = Message::MessageType_NUM;
+  bool end = false;
 
   Message *message = _traffic_manager->PeekMessage(node, vnet);
   if (message != nullptr) {
     flow = message->flow;
     src = message->src;
     type = message->type;
+    end = message->end;
 
     if (_print_messages) {
       *gWatchOut << GetSimTime() << " | node" << node << " | "
@@ -120,7 +132,7 @@ tuple<int, int, Message::MessageType> BookSim::PeekMessage(int node, int vnet)
     }
   }
 
-  return make_tuple(flow, src, type);
+  return make_tuple(flow, src, type, end);
 }
 
 void BookSim::DequeueMessage(int node, int vnet)
@@ -158,7 +170,7 @@ bool BookSim::RunTest()
     _traffic_manager->WakeUp();
     for (int node = 0; node < gNodes; node++) {
       for (int vnet = 0; vnet < 2; vnet++) {
-        tuple<int, int, Message::MessageType> result = PeekMessage(node, vnet);
+        tuple<int, int, Message::MessageType, bool> result = PeekMessage(node, vnet);
         if (get<1>(result) >= 0) DequeueMessage(node, vnet);
       }
     }
