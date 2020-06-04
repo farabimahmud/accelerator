@@ -7,7 +7,7 @@ import json
 
 def main(folder_path):
 
-    schemes = ['Ring', 'MXNetTree-$\\beta$', 'MultiTree-$\\gamma$']
+    schemes = ['Ring', 'MXNetTree-$\\beta$', 'MultiTree-$\\delta$']
     names = ['ring', 'mxnettree_beta', 'multitree_gamma']
 
     nodes = [16, 36, 64, 100, 144, 196, 256]
