@@ -284,7 +284,6 @@ from dtree_allreduce import DTreeAllreduce
 from multitree_allreduce import MultiTreeAllreduce
 from mxnettree_allreduce import MXNetTreeAllreduce
 from hdrm_allreduce import HDRMAllreduce
-from multitree2_allreduce import MultiTree2Allreduce
 
 
 '''
@@ -307,8 +306,6 @@ def construct_allreduce(args):
         allreduce = DTreeAllreduce(args, network)
     elif args.allreduce == 'hdrm':
         allreduce = HDRMAllreduce(args, network)
-    elif args.allreduce == 'multitree2':
-        allreduce = MultiTree2Allreduce(args, network)
     else:
         raise RuntimeError('Unknow allreduce schedule: ' + args.allreduce)
 
