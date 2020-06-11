@@ -57,10 +57,8 @@ class MultiTreeAllreduce(Allreduce):
                 changed = True
 
                 num_new_children = {}
-                for root in range(self.network.nodes):
-                    num_new_children[root] = {}
-                    for parent in last_tree_nodes[root]:
-                        num_new_children[root][parent] = 0
+                for node in range(self.network.nodes):
+                    num_new_children[node] = 0
 
                 turns = 0
                 while changed:
@@ -76,12 +74,12 @@ class MultiTreeAllreduce(Allreduce):
                     if len(tree_nodes[root]) < self.network.nodes:
                         for parent in last_tree_nodes[root]:
                             children = deepcopy(from_nodes[parent])
-                            if num_new_children[root][parent] == kary - 1:
+                            if num_new_children[parent] == kary - 1:
                                 conflicts[root] += 1
                                 continue
                             for child in children:
                                 if child not in tree_nodes[root]:
-                                    num_new_children[root][parent] += 1
+                                    num_new_children[parent] += 1
                                     if verbose:
                                         print(' -- add node {} to tree {}'.format(child, root))
                                         print('    before: {}'.format(self.trees[root]))
@@ -271,7 +269,7 @@ def test(args):
     kary = args.kary
     allreduce = MultiTreeAllreduce(args, network)
     # NOTE: sorted doesn't help for multitree since it only considers available links
-    allreduce.compute_trees(kary, alternate=True, sort=False, verbose=False)
+    allreduce.compute_trees(kary, alternate=True, sort=False, verbose=True)
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree.dot')
     timesteps = allreduce.timesteps

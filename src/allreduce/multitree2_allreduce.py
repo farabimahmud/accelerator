@@ -26,7 +26,6 @@ class MultiTree2Allreduce(Allreduce):
     '''
     def compute_trees(self, kary, alternate=True, sort=False, verbose=False):
         assert kary > 1
-        assert self.network.type == 'BiGraph'
 
         # initialize empty trees
         self.trees = {}

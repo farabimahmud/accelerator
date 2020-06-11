@@ -12,6 +12,9 @@ class Network(ABC):
         self.to_nodes = {}
         self.edges = []
         self.adjacency_matrix = np.zeros((self.nodes, self.nodes))
+        self.node_to_switch = {}
+        self.switch_to_switch = {}
+        self.switch_to_node = {}
 
 
     '''
