@@ -94,6 +94,7 @@ public:
 
   int vnet;
   Message *msg;
+  int size;
 
   void Reset();
 
