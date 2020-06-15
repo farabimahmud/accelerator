@@ -1205,7 +1205,7 @@ class MXNetTreeAllreduce(Allreduce):
                         else:
                             if verbose:
                                 if num_new_children[parent] == kary - 1:
-                                    print(' ** reach kary {} for parent {}'.format(num_new_children[root][parent]+1, parent))
+                                    print(' ** reach kary {} for parent {}'.format(num_new_children[parent]+1, parent))
                                 elif pending_dependent_children[root][child] > 0:
                                     print(' ** {} dependent child(ren) of {} not added yet'.format(
                                         pending_dependent_children[root][child], child))
