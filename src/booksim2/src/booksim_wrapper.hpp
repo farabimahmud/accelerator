@@ -35,6 +35,7 @@ public:
   double GetClkLeakPower();
   double GetLinkDynPower();
   double GetLinkLeakPower();
+  uint64_t GetNetLinkActivities();
 
   bool RunTest();
   inline bool Idle() { return _traffic_manager->Idle() && _outstanding_messages == 0; }

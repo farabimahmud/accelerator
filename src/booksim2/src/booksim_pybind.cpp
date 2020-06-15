@@ -36,6 +36,7 @@ PYBIND11_MODULE(pybooksim, m) {
     .def("GetClkLeakPower", &BookSim::GetClkLeakPower)
     .def("GetLinkDynPower", &BookSim::GetLinkDynPower)
     .def("GetLinkLeakPower", &BookSim::GetLinkLeakPower)
+    .def("GetNetLinkActivities", &BookSim::GetNetLinkActivities)
     ;
 
   py::class_<Message, std::unique_ptr<Message, py::nodelete>> message(m, "Message");
