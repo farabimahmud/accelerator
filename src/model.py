@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,13 @@ class Model:
             self.size = 0
             self.num_layers = 0
             self.layers = []
+            self.layer_size = []
             self.name = args.network.split('/')[-1].split('.')[0]
+
+            self.inference_cycles = None
+            self.backprop_cycles = None
+            self.inference_layer_wise_cycles = None
+            self.backprop_layer_wise_cycles = None
 
             self.parse_model()
 
@@ -50,6 +57,10 @@ class Model:
             self.num_layers += 1
             layer_size = int(elems[3]) * int(elems[4]) * int(elems[5]) * int(elems[6])
             self.size += layer_size
+            self.layer_size.append(layer_size)
+
+        self.inference_layer_wise_cycles = np.zeros(self.num_layers)
+        self.backprop_layer_wise_cycles = np.zeros(self.num_layers)
 
         logger.info('Model loading finished\n')
         for l in range(self.num_layers):
