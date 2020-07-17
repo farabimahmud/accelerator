@@ -1149,8 +1149,8 @@ class MXNetTreeAllreduce(Allreduce):
 
         # keep track of number of new children added for the timestep, constrained by k-ary
         num_new_children = {}
-        for root in range(self.network.nodes):
-            num_new_children[root] = {}
+        for node in range(self.network.nodes):
+            num_new_children[node] = 0
 
         if verbose:
             print('timestep {}'.format(self.timesteps))
@@ -1177,14 +1177,12 @@ class MXNetTreeAllreduce(Allreduce):
                     if verbose:
                         print(' try to add edge {}->{} to tree {}'.format(child, parent, root))
                     if child in from_nodes[parent]: # link available
-                        if parent not in num_new_children[root].keys():
-                            num_new_children[root][parent] = 0
                         # all dependent children of 'child' have been scheduled in eariler timesteps
                         # and parent's readix < k in current timestep
                         if child not in tree_level_nodes[root][self.timesteps] and \
                                 pending_dependent_children[root][child] == 0 and \
-                                num_new_children[root][parent] < kary - 1:
-                            num_new_children[root][parent] += 1
+                                num_new_children[parent] < kary - 1:
+                            num_new_children[parent] += 1
                             assert child not in tree_nodes[root]
                             change = True
                             if verbose:
@@ -1206,8 +1204,8 @@ class MXNetTreeAllreduce(Allreduce):
                                 break
                         else:
                             if verbose:
-                                if num_new_children[root][parent] == kary - 1:
-                                    print(' ** reach kary {} for parent {}'.format(num_new_children[root][parent]+1, parent))
+                                if num_new_children[parent] == kary - 1:
+                                    print(' ** reach kary {} for parent {}'.format(num_new_children[parent]+1, parent))
                                 elif pending_dependent_children[root][child] > 0:
                                     print(' ** {} dependent child(ren) of {} not added yet'.format(
                                         pending_dependent_children[root][child], child))
@@ -1248,7 +1246,7 @@ class MXNetTreeAllreduce(Allreduce):
                 # reset for new iteration
                 for root in range(self.network.nodes):
                     tree_level_nodes[root][self.timesteps] = []
-                    num_new_children[root] = {}
+                    num_new_children[root] = 0
 
         # verify that there is no link conflicts
         for root in range(self.network.nodes):

@@ -141,6 +141,7 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
         f->head = true;
         f->dest = packet_dest;
       }
+      f->size = size;
     } else {
       f->head = false;
       f->dest = -1;
@@ -386,6 +387,11 @@ void ScaleTrafficManager::_Step()
                 if (cf->watch) {
                   *gWatchOut << GetSimTime() << " | " << FullName() << " | "
                     << "  Output VC " << vc << " is full." << endl;
+                }
+              } else if (_virtual_cut_through && dest_buf->AvailableFor(vc) < cf->size) {
+                if (cf->watch) {
+                  *gWatchOut << GetSimTime() << " | " << FullName() << " | "
+                    << "  Output VC " << vc << " doesn't have enough buffer (cut-through)." << endl;
                 }
               } else {
                 if (cf->watch) {

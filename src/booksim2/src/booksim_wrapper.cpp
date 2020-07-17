@@ -327,3 +327,11 @@ double BookSim::GetLinkLeakPower()
     return 0.0;
 }
 
+uint64_t BookSim::GetNetLinkActivities()
+{
+    if (_power_model)
+      return _power_model->GetNetLinkActivities();
+    else
+      return 0;
+}
+

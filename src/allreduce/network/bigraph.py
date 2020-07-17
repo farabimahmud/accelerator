@@ -10,9 +10,6 @@ class BiGraph(Network):
         self.m = args.bigraph_m # No. sub-nodes per physical group
         self.n = args.bigraph_n # No. switches
         assert self.nodes == self.m * self.n
-        self.node_to_switch = {}
-        self.switch_to_switch = {}
-        self.switch_to_node = {}
 
 
     '''
@@ -25,7 +22,6 @@ class BiGraph(Network):
             self.switch_to_node[sw] = []
             self.switch_to_switch[sw] = []
             for node in range(self.m):
-                self.node_to_switch
                 self.switch_to_node[sw].append(n)
                 self.node_to_switch[n] = (sw, 1)
                 n += 1

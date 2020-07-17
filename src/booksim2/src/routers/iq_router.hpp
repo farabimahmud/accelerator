@@ -52,6 +52,7 @@ class IQRouter : public Router {
 
   int _vcs;
 
+  bool _virtual_cut_through;
   bool _vc_busy_when_full;
   bool _vc_prioritize_empty;
   bool _vc_shuffle_requests;

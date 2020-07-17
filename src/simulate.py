@@ -59,7 +59,7 @@ def init():
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
     parser.add_argument('--allreduce', default='multitree',
-                        help='allreduce shedule (multitree|mxnettree|ring|dtree|hdrm|multitree2), default=multitree')
+                        help='allreduce shedule (multitree|mxnettree|ring|dtree|hdrm), default=multitree')
     parser.add_argument('-k', '--kary', default=2, type=int,
                         help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--radix', default=4, type=int,
@@ -279,7 +279,7 @@ def main():
     for i, hmc in enumerate(hmcs):
         logger.debug(' - HMC {} sends {} messages'.format(i, hmc.total_messages_sent))
         total_messages_sent += hmc.total_messages_sent
-    logger.info('Total number of messeges: {}\n'.format(total_messages_sent))
+    logger.info('Total number of messages: {}\n'.format(total_messages_sent))
 
     assert network.booksim.Idle()
     for i, hmc in enumerate(hmcs):
@@ -315,6 +315,7 @@ def main():
     router_leak_power = network.booksim.GetRouterLeakPower()
     link_dyn_power = network.booksim.GetLinkDynPower()
     link_leak_power = network.booksim.GetLinkLeakPower()
+    net_link_activities = network.booksim.GetNetLinkActivities()
     sim['results']['power'] = {}
     sim['results']['power']['network'] = {}
     sim['results']['power']['network']['dynamic'] = net_dyn_power
@@ -328,6 +329,7 @@ def main():
     sim['results']['power']['network']['link']['dynamic'] = link_dyn_power
     sim['results']['power']['network']['link']['static'] = link_leak_power
     sim['results']['power']['network']['link']['total'] = link_dyn_power + link_leak_power
+    sim['results']['power']['network']['link']['flits'] = net_link_activities
 
     if args.allreduce == 'mxnettree' or args.allreduce == 'multitree':
         if args.radix == 1 and args.message_size != 0:

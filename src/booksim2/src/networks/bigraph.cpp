@@ -73,8 +73,9 @@ void BiGraph::_BuildNet(const Configuration &config)
       for (int port = 0; port < _n / 2; port++) {
         int link = id * _m + port;
         _routers[id]->AddOutputChannel(_chan[link], _chan_cred[link]);
-        _chan[link]->SetLatency(1);
-        _chan_cred[link]->SetLatency(1);
+        _chan[link]->SetLatency(150);
+        _chan_cred[link]->SetLatency(150);
+        // TODO: parameterize latency
       }
 
       // connect input channels

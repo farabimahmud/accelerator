@@ -46,6 +46,7 @@ ostream& operator<<( ostream& os, const Flit& f )
      << " Packet ID: " << f.pid
      << " Packet SubID: " << f.subpid
      << " Type: " << f.type
+     << " Size: " << f.size
      << " Head: " << f.head
      << " Tail: " << f.tail
      << " SubMessage Tail: " << f.submsg_tail << endl;
@@ -87,6 +88,7 @@ void Flit::Reset()
   msg = nullptr;
   submsg_tail = false;
   subpid = -1;
+  size = -1;
 }
 
 Flit * Flit::New() {

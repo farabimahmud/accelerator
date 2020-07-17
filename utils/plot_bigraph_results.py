@@ -25,8 +25,10 @@ def main(folder_path):
 
     benchmarks = ['alexnet', 'AlphaGoZero', 'FasterRCNN', 'Googlenet', 'NCF_recommendation',
             'Resnet50', 'Transformer']
-    names = ['ring', 'ring_gamma', 'dtree', 'mxnettree_alpha', 'mxnettree_beta', 'multitree_alpha', 'multitree_beta', 'multitree_gamma']
-    schemes = ['Ring', 'Ring-$\\gamma$', '2BinaryTree', 'MXNetTree-$\\alpha$', 'MXNettree-$\\beta$', 'MultiTree-$\\alpha$', 'MultiTree-$\\beta$', 'MultiTree-$\\delta$']
+    names = ['hdrm', 'hdrm_gamma', 'multitree2', 'multitree2_gamma']
+    schemes = ['HDRM', 'HDRM-$\\gamma$', 'MultiTree-$\\alpha$', 'MultiTree-$\\gamma$']
+    #names = ['hdrm', 'multitree2']
+    #schemes = ['HDRM', 'MultiTree']
 
     entry_names = ['Allreduce', 'Training']
     energy_entry_names = ['Dynamic', 'Static']
@@ -64,6 +66,14 @@ def main(folder_path):
     energy_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
     norm_energy_breakdown = np.zeros((2, int(len(benchmarks) * len(schemes))), dtype=np.float)
 
+    for b, bench in enumerate(benchmarks):
+        filename = folder_path + '/' + bench + '_' + names[2] + '.json'
+
+        with open(filename, 'r') as json_file:
+            sim = json.load(json_file)
+            training_cycles[2][b] = sim['results']['performance']['training']
+            json_file.close()
+
     for s, scheme in enumerate(schemes):
         for b, bench in enumerate(benchmarks):
             filename = folder_path + '/' + bench + '_' + names[s] + '.json'
@@ -77,10 +87,10 @@ def main(folder_path):
                     energy_cycles[s][b] = sim['results']['performance']['total']
                 else:
                     energy_cycles[s][b] = allreduce_cycles[s][b]
-                if scheme == 'Ring':
+                if scheme == 'MultiTree':
                     cycles[s][b] = sim['results']['performance']['total']
                 else:
-                    training_cycles[s][b] = training_cycles[0][b]
+                    training_cycles[s][b] = training_cycles[2][b]
                     cycles[s][b] = allreduce_cycles[s][b] + training_cycles[s][b]
 
                 norm_cycles[s][b] = cycles[s][b] / cycles[0][b]
@@ -144,8 +154,6 @@ def main(folder_path):
 
     colors = ['#e0f3db','#a8ddb5','#43a2ca', '#e0f3db','#a8ddb5','#43a2ca']
     colors = ['#f0f9e8','#ccebc5','#a8ddb5','#7bccc4','#43a2ca','#0868ac']
-    colors = ['#f0f9e8','#ccebc5','#a8ddb5','#7bccc4','#4eb3d3','#2b8cbe','#08589e']
-    colors = ['#f7fcf0','#e0f3db','#ccebc5','#a8ddb5','#7bccc4','#4eb3d3','#2b8cbe','#08589e']
     plt.rc('legend', fontsize=22)
     plt.rc('font', size=18)
 
@@ -173,7 +181,7 @@ def main(folder_path):
         schemes,
         loc='upper center',
         bbox_to_anchor=(0.5, 1.25),
-        ncol=4,
+        ncol=len(schemes),
         frameon=False,
         handletextpad=0.6,
         columnspacing=1)
@@ -191,7 +199,7 @@ def main(folder_path):
     data = [list(i) for i in zip(*norm_cycles_breakdown)]
     data = np.array(data, dtype=np.float64)
     figpath = folder_path + '/norm_runtime.pdf'
-    pdfpage, fig = pdf.plot_setup(figpath, figsize=(30, 8), fontsize=26, font=('family', 'Tw Cen MT'))
+    pdfpage, fig = pdf.plot_setup(figpath, figsize=(15, 8), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
     ax2 = ax.twinx()  # ax for allreduce speedup
     hdls = barchart.draw(
@@ -205,12 +213,12 @@ def main(folder_path):
         colors=colors,
         legendloc='upper center',
         legendncol=len(entry_names),
-        xticklabelfontsize=22,
+        xticklabelfontsize=20,
         xticklabelrotation=90,
         log=False)
     ax.set_ylabel('Normalized Runtime Breakdown')
     ax.yaxis.grid(True, linestyle='--')
-    ax.set_ylim(0, 3)
+    ax.set_ylim(0, 1.2)
     fmt.resize_ax_box(ax, hratio=0.78)
     ly = len(benchmarks)
     scale = 1. / ly
@@ -222,7 +230,7 @@ def main(folder_path):
             ax.text(
                 lxpos, ypos, xlabels[pos], ha='center', transform=ax.transAxes)
         add_line(ax, pos * scale, ypos)
-
+    #add_line(ax, 1, ypos)
 
 
     #############################
@@ -249,9 +257,8 @@ def main(folder_path):
 
     data = [list(i) for i in zip(*allreduce_speedup)]
     data = np.array(data, dtype=np.float64)
-    ax2.set_ylim(0, 3)
     ax2.set_ylabel('Allreduce Speedup')
-    fmt.resize_ax_box(ax2, hratio=0.78)
+    ax2.set_ylim(0, 1.2)
     for i in range(len(benchmarks)):
         tmp = ax2.plot(xs[i], data[i], '-o', markersize=8, color='black', markeredgecolor='#4b4a25')
         if i == 0:
@@ -266,6 +273,7 @@ def main(folder_path):
         frameon=False,
         handletextpad=0.6,
         columnspacing=1)
+    fig.subplots_adjust(bottom=0.38)
 
     pdf.plot_teardown(pdfpage)
 
@@ -278,7 +286,7 @@ def main(folder_path):
     data = [list(i) for i in zip(*norm_energy_breakdown)]
     data = np.array(data, dtype=np.float64)
     figpath = folder_path + '/norm_energy.pdf'
-    pdfpage, fig = pdf.plot_setup(figpath, figsize=(30, 8), fontsize=26, font=('family', 'Tw Cen MT'))
+    pdfpage, fig = pdf.plot_setup(figpath, figsize=(15, 8), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
     hdls = barchart.draw(
         ax,
@@ -291,7 +299,7 @@ def main(folder_path):
         colors=colors,
         legendloc='upper center',
         legendncol=len(energy_entry_names),
-        xticklabelfontsize=22,
+        xticklabelfontsize=20,
         xticklabelrotation=90,
         log=False)
     ax.set_ylabel('Normalized Energy Breakdown')
@@ -316,6 +324,7 @@ def main(folder_path):
             ax.text(
                 lxpos, ypos, xlabels[pos], ha='center', transform=ax.transAxes)
         add_line(ax, pos * scale, ypos)
+    fig.subplots_adjust(bottom=0.38)
     pdf.plot_teardown(pdfpage)
 
     plt.show()

@@ -124,6 +124,7 @@ BookSimConfig::BookSimConfig( )
   _int_map["feedback_aging_scale"] = 1;
   _int_map["feedback_offset"] = 0;
 
+  _int_map["virtual_cut_through"] = 1; // TODO: change it
   _int_map["wait_for_tail_credit"] = 0; // reallocate a VC before a tail credit?
   _int_map["vc_busy_when_full"] = 0; // mark VCs as in use when they have no credit available
   _int_map["vc_prioritize_empty"] = 0; // prioritize empty VCs over non-empty ones in VC allocation

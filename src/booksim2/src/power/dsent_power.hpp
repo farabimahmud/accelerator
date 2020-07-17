@@ -42,6 +42,7 @@ protected:
   // link power
   double _link_dyn_power;
   double _link_leak_power;
+  uint64_t _network_channel_activities;
 
   // network power
   double _net_dyn_power;
@@ -75,6 +76,7 @@ public:
   inline double GetClkLeakPower() const { return _clk_leak_power; }
   inline double GetLinkDynPower() const { return _link_dyn_power; }
   inline double GetLinkLeakPower() const { return _link_leak_power; }
+  inline uint64_t GetNetLinkActivities() const { return _network_channel_activities; }
 
 };
 

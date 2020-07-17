@@ -1,4 +1,5 @@
 import argparse
+import math
 
 from network import Network
 
@@ -77,6 +78,54 @@ class KNCube(Network):
                 east = node + 1
                 self.from_nodes[node].append(east)
                 self.to_nodes[node].append(east)
+
+        for node in range(self.nodes):
+            self.node_to_switch[node] = (node, self.args.kary - 1)
+            self.switch_to_node[node] = []
+            for i in range(self.args.kary - 1):
+                self.switch_to_node[node].append(node)
+            self.switch_to_switch[node] = []
+
+            row = node // self.dimension
+            col = node % self.dimension
+            #print('node {}: row {} col {}'.format(node, row, col))
+
+            north = None
+            south = None
+            east = None
+            west = None
+            if row == 0 and not self.mesh:
+                if self.dimension > 2:
+                    north = node + self.dimension * (self.dimension - 1)
+            elif row != 0:
+                north = node - self.dimension
+
+            if row == self.dimension - 1 and not self.mesh:
+                if self.dimension > 2:
+                    south = node - self.dimension * (self.dimension - 1)
+            elif row != self.dimension - 1:
+                south = node + self.dimension
+
+            if col == 0 and not self.mesh:
+                if self.dimension > 2:
+                    west = node + self.dimension - 1
+            elif col != 0:
+                west = node - 1
+
+            if col == self.dimension - 1 and not self.mesh:
+                if self.dimension > 2:
+                    east = node - self.dimension + 1
+            elif col != self.dimension - 1:
+                east = node + 1
+
+            if north != None:
+                self.switch_to_switch[node].append(north)
+            if south != None:
+                self.switch_to_switch[node].append(south)
+            if west != None:
+                self.switch_to_switch[node].append(west)
+            if east != None:
+                self.switch_to_switch[node].append(east)
 
         #if self.mesh:
         #    print('mesh graph: (node: from node list)')
