@@ -230,6 +230,7 @@ int CKNCube::NodeToPort(int node)
 
 void CKNCube::RegisterRoutingFunctions() {
   gRoutingFunctionMap["dor_ctorus"] = &dor_ctorus;
+  gRoutingFunctionMap["dor_cmesh"] = &dim_order_cmesh;
 }
 
 // Concentrated Torus
@@ -353,6 +354,109 @@ void dor_ctorus(const Router *r, const Flit *f, int in_channel, OutputSet
         vcBegin += available_vcs;
       }
     }
+  }
+
+  if (f->watch) {
+    if (!inject) {
+      *gWatchOut << GetSimTime() << " | " << r->FullName() << " | "
+        << "Adding VC range [" << vcBegin << "," << vcEnd << "]"
+        << " at output port " << out_port
+        << " for flit " << f->id
+        << " (input port " << in_channel
+        << ", source " << f->src
+        << ", source router " << CKNCube::NodeToRouter(f->src)
+        << ", destination " << f->dest
+        << ", destination router " << CKNCube::NodeToRouter(f->dest) << ")." << endl;
+    } else {
+      *gWatchOut << GetSimTime() << " | node" << f->src << " | (inject) "
+        << "Adding VC range [" << vcBegin << "," << vcEnd << "]"
+        << " at output port " << out_port
+        << " for flit " << f->id
+        << " (source " << f->src
+        << ", source router " << CKNCube::NodeToRouter(f->src)
+        << ", destination " << f->dest
+        << ", destination router " << CKNCube::NodeToRouter(f->dest) << ")." << endl;
+    }
+  }
+
+  outputs->Clear();
+  outputs->AddRange(out_port, vcBegin, vcEnd);
+}
+
+int dor_next_cmesh(int cur_router, int dest_node, bool descending)
+{
+  int out_port = -1;
+
+  int dest_router = CKNCube::NodeToRouter(dest_node);
+
+  if (cur_router == dest_router) {
+    out_port = CKNCube::NodeToPort(dest_node);
+  } else {
+    int cur = cur_router;
+    int dest = dest_router;
+
+    int dim_left;
+
+    if(descending) {
+      for ( dim_left = ( gN - 1 ); dim_left > 0; --dim_left ) {
+        if ( ( cur * gK / gNodes ) != ( dest * gK / gNodes ) ) { break; }
+        cur = (cur * gK) % gNodes; dest = (dest * gK) % gNodes;
+      }
+      cur = (cur * gK) / gNodes;
+      dest = (dest * gK) / gNodes;
+    } else {
+      for ( dim_left = 0; dim_left < ( gN - 1 ); ++dim_left ) {
+        if ( ( cur % gK ) != ( dest % gK ) ) { break; }
+        cur /= gK; dest /= gK;
+      }
+      cur %= gK;
+      dest %= gK;
+    }
+
+    if ( cur < dest ) {
+      out_port = 2*dim_left;     // Right
+    } else {
+      out_port = 2*dim_left + 1; // Left
+    }
+  }
+
+  return out_port;
+}
+
+void dim_order_cmesh(const Router *r, const Flit *f, int in_channel, OutputSet
+    *outputs, bool inject)
+{
+  int vcBegin = 0, vcEnd = gNumVCs - 1;
+  if ( f->type == Flit::READ_REQUEST ) {
+    vcBegin = gReadReqBeginVC;
+    vcEnd = gReadReqEndVC;
+  } else if ( f->type == Flit::WRITE_REQUEST ) {
+    vcBegin = gWriteReqBeginVC;
+    vcEnd = gWriteReqEndVC;
+  } else if ( f->type ==  Flit::READ_REPLY ) {
+    vcBegin = gReadReplyBeginVC;
+    vcEnd = gReadReplyEndVC;
+  } else if ( f->type ==  Flit::WRITE_REPLY ) {
+    vcBegin = gWriteReplyBeginVC;
+    vcEnd = gWriteReplyEndVC;
+  } else if (f->type == Flit::REQUEST) {
+    vcBegin = gRequestBeginVC;
+    vcEnd = gRequestEndVC;
+  } else if (f->type == Flit::REPLY) {
+    vcBegin = gReplyBeginVC;
+    vcEnd = gReplyEndVC;
+  }
+  assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
+
+  int out_port;
+
+  if (inject) {
+    out_port = -1;
+  } else {
+    int cur_router = r->GetID();
+    int dest = f->dest;
+
+    out_port = dor_next_cmesh(cur_router, dest, false);
   }
 
   if (f->watch) {

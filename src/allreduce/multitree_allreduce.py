@@ -44,6 +44,8 @@ class MultiTreeAllreduce(Allreduce):
         sorted_roots = list(range(self.network.nodes))
         conflicts = [0] * self.network.nodes
 
+        constructed_trees = []
+
         while num_trees < self.network.nodes:
             if verbose:
                 print('timestep {}'.format(self.timesteps))
@@ -131,7 +133,8 @@ class MultiTreeAllreduce(Allreduce):
 
                     turns += 1
 
-                    if len(tree_nodes[root]) == self.network.nodes:
+                    if len(tree_nodes[root]) == self.network.nodes and root not in constructed_trees:
+                        constructed_trees.append(root)
                         num_trees += 1
                         if verbose:
                             print('timestep {} - tree {} constructed: {}'.format(self.timesteps, root, self.trees[root]))

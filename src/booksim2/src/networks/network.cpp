@@ -90,8 +90,10 @@ Network * Network::New(const Configuration & config, const string & name)
     KNCube::RegisterRoutingFunctions() ;
     n = new KNCube( config, name, true );
   } else if ( topo == "cmesh" ) {
-    CMesh::RegisterRoutingFunctions() ;
-    n = new CMesh( config, name );
+    //CMesh::RegisterRoutingFunctions() ;
+    //n = new CMesh( config, name );
+    CKNCube::RegisterRoutingFunctions();
+    n = new CKNCube(config, name, true);
   } else if ( topo == "fly" ) {
     KNFly::RegisterRoutingFunctions() ;
     n = new KNFly( config, name );

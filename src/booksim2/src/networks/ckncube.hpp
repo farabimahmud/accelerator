@@ -43,4 +43,8 @@ void dor_next_ctorus(int cur_router, int dest_node, int in_port, int *out_port, 
 void dor_ctorus(const Router *r, const Flit *f, int in_channel, OutputSet
     *outputs, bool inject);
 
+int dor_next_cmesh(int cur_router, int dest_node, bool descending = false);
+
+void dim_order_cmesh(const Router *r, const Flit *f, int in_channel, OutputSet
+    *outputs, bool inject);
 #endif

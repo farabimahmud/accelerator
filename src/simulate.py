@@ -279,7 +279,7 @@ def main():
     for i, hmc in enumerate(hmcs):
         logger.debug(' - HMC {} sends {} messages'.format(i, hmc.total_messages_sent))
         total_messages_sent += hmc.total_messages_sent
-    logger.info('Total number of messeges: {}\n'.format(total_messages_sent))
+    logger.info('Total number of messages: {}\n'.format(total_messages_sent))
 
     assert network.booksim.Idle()
     for i, hmc in enumerate(hmcs):
