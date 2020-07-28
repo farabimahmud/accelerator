@@ -101,8 +101,6 @@ class NPU:
                     dram_ofmap_trace_file = dram_ofmap_trace_file
                     )
 
-            model.inference_layer_wise_cycles[l] = int(cycles)
-
             total_cycles += int(cycles)
             total_util += util * int(cycles)
 
@@ -165,10 +163,7 @@ class NPU:
         total_cycles = 0
         total_util   = 0
 
-        # TODO
-        layer_wise = [model.num_layers - 1]
-        for l in layer_wise:
-        #for l in reversed(range(model.num_layers)):
+        for l in reversed(range(model.num_layers)):
             name = model.layers[l]['name']
             logger.info('\nCommencing back-propagation run for ' + name)
 
@@ -229,8 +224,6 @@ class NPU:
                     dram_filter_gradient_trace_file = dram_filter_gradient_trace_file,
                     dram_ifmap_gradient_trace_file = dram_ifmap_gradient_trace_file
                     )
-
-            model.backprop_layer_wise_cycles[l] = int(cycles)
 
             total_cycles += cycles
             total_util += util * cycles
