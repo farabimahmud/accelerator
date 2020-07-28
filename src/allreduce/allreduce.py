@@ -240,6 +240,8 @@ class Allreduce(ABC):
         for root in range(self.network.nodes):
             timesteps = len(self.reduce_scatter_schedule[root])
             for timestep in range(timesteps):
+                if self.reduce_scatter_schedule[root][timestep] == None:
+                    continue
                 num_concurrent_reduce_scatter = len(self.reduce_scatter_schedule[root][timestep])
                 if max_concurrent_reduce_scatter[root] < num_concurrent_reduce_scatter:
                     max_concurrent_reduce_scatter[root] = num_concurrent_reduce_scatter

@@ -96,10 +96,14 @@ def init():
                         help='prioritize for arbitration to enforce schedule sequencing, default=False')
     parser.add_argument('--oracle-lockstep', default=False, action='store_true',
                         help='magic lockstep with zero overhead')
+    parser.add_argument('--estimate-lockstep', default=False, action='store_true',
+                        help='estimate message finished time based on data size to achieve lockstep')
     parser.add_argument('--synthetic-data-size', default=0, type=int,
                         help='synthetic data size in number of parameters, default is 0 (run model)')
 
     args = parser.parse_args()
+
+    assert not (args.oracle_lockstep and args.estimate_lockstep)
 
     if args.outdir:
         args.logdir = args.outdir

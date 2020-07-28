@@ -305,6 +305,7 @@ class MultiTreeAllreduce(Allreduce):
                     if verbose:
                         print('    timestep {}: {}'.format(timestep, reduce_scatter_schedule[node][timestep]))
                 else:
+                    self.reduce_scatter_schedule[node].append(None)
                     if verbose:
                         print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
             flow_children = [(node, child) for child in self.trees_children[node][node]]

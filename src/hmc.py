@@ -62,6 +62,8 @@ class HMC(SimObject):
         self.reduce_scatter_schedule = None
         self.all_gather_schedule = None
         self.new_step = True
+        self.estimated_steptime = None
+        self.estimated_next_steptime = None
 
         self.cur_mids = np.zeros(self.args.radix, dtype=int)
         for i in range(self.args.radix):
@@ -90,11 +92,21 @@ class HMC(SimObject):
             self.base_num_messages = 1
             self.base_num_sub_messages = math.ceil(self.model.size * self.bytes_per_param /
                     self.sub_message_size / self.args.num_hmcs)
+            # 58 is from message-buffer-size of 32, booksim-message-buffer size 16,
+            # and booksim-injection-queue of 80-flit depth
+            if self.base_num_sub_messages <= 58:
+                self.estimated_steptime = self.base_num_sub_messages
+            else:
+                self.estimated_steptime = self.base_num_sub_messages * 16 - 58 * 16
         else:
             assert self.message_size >= self.sub_message_size
             self.base_num_messages = math.ceil(self.model.size * self.bytes_per_param /
                     self.message_size / self.args.num_hmcs)
             self.base_num_sub_messages = math.ceil(self.message_size / self.sub_message_size)
+            if self.base_num_messages <= 58:
+                self.estimated_steptime = self.base_num_messages
+            else:
+                self.estimated_steptime = self.base_num_messages * 17 - 58 * 16
     # end of load_model()
 
 
@@ -136,6 +148,8 @@ class HMC(SimObject):
         self.all_gather_schedule = deepcopy(allreduce.all_gather_schedule[self.id])
         if self.args.oracle_lockstep:
             for i, schedules in enumerate(self.reduce_scatter_schedule):
+                if schedules == None:
+                    continue
                 for fl, schedule in schedules.items():
                     if schedule[2] != 0:
                         HMC.allreduce_remaining_for_timestep[schedule[3]] += 1
@@ -317,7 +331,13 @@ class HMC(SimObject):
             assert len(self.pending_aggregations) == 0
             self.communication_state = 'reduce-scatter'
             assert len(self.reduce_scatter_schedule) > 0
-            self.schedule('reduce-scatter', cur_cycle + 1)
+            if self.reduce_scatter_schedule[0] == None:
+                self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
+                self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+                if self.id == 14:
+                    logger.info('{} | {} | 0 schedule for None next time {}'.format(cur_cycle, self.name, self.estimated_next_steptime))
+            else:
+                self.schedule('reduce-scatter', cur_cycle + 1)
 
         elif len(self.pending_aggregations) > 0: # allreduce aggregation
             # clear dependency
@@ -329,6 +349,8 @@ class HMC(SimObject):
                 flow_child = (flow, child)
                 dependent_flow = None
                 for i, schedules in enumerate(self.reduce_scatter_schedule):
+                    if schedules == None:
+                        continue
                     for fl, schedule in schedules.items():
                         if flow_child in schedule[1]:
                             level = i
@@ -353,11 +375,17 @@ class HMC(SimObject):
     '''
     def reduce_scatter_evaluate(self, cur_cycle):
         assert self.communication_state == 'reduce-scatter'
-        assert len(self.free_nis) > 0
+        assert len(self.free_nis) > 0 or cur_cycle == self.estimated_next_steptime
         assert len(self.reduce_scatter_schedule) > 0
         assert len(self.just_allocated_nis) == 0
         if self.new_step == True and self.args.strict_schedule and \
                 len(self.free_nis) != self.args.radix:
+            if self.args.estimate_lockstep and len(self.reduce_scatter_schedule) > 1:
+                if self.reduce_scatter_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
+                    self.reduce_scatter_schedule.pop(0)
+                    if self.reduce_scatter_schedule[0] == None:
+                        self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
+                        self.estimated_next_steptime = cur_cycle + self.estimated_steptime
             return
         self.new_step = False
         for ni in self.free_nis:
@@ -368,6 +396,21 @@ class HMC(SimObject):
             num_data_copy = None
             timestep = None
             if len(self.reduce_scatter_schedule) > 0:
+                while self.reduce_scatter_schedule[0] == None:
+                    if self.args.estimate_lockstep:
+                        if cur_cycle == self.estimated_next_steptime:
+                            self.reduce_scatter_schedule.pop(0)
+                            if self.reduce_scatter_schedule[0] == None:
+                                self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
+                                self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+                            else:
+                                if self.new_step == True and self.args.strict_schedule:
+                                    if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                        self.schedule('reduce-scatter', cur_cycle + 1)
+                                elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                    self.schedule('reduce-scatter', cur_cycle + 1)
+                        return
+                    self.reduce_scatter_schedule.pop(0)
                 for flow, schedule in self.reduce_scatter_schedule[0].items():
                     depending_children = schedule[1]
                     if len(depending_children) == 0:
@@ -383,9 +426,6 @@ class HMC(SimObject):
                         break
                     assert timestep == HMC.allreduce_timestep
                 self.reduce_scatter_schedule[0].pop(send_flow)
-                if len(self.reduce_scatter_schedule[0]) == 0:
-                    self.reduce_scatter_schedule.pop(0)
-                    self.new_step = True
                 if parent != None:
                     assert dest_ni != None
                     assert self.sending[ni] == None
@@ -396,6 +436,20 @@ class HMC(SimObject):
                     else:
                         self.num_messages[ni] = self.base_num_messages * num_data_copy
                         self.num_sub_messages[ni] = self.base_num_sub_messages
+                if len(self.reduce_scatter_schedule[0]) == 0:
+                    self.reduce_scatter_schedule.pop(0)
+                    self.new_step = True
+                    if self.args.estimate_lockstep and len(self.reduce_scatter_schedule) > 0:
+                        if self.reduce_scatter_schedule[0] == None:
+                            self.schedule('reduce-scatter', cur_cycle + 2 * self.estimated_steptime)
+                            self.estimated_next_steptime = cur_cycle + 2 * self.estimated_steptime
+                        else:
+                            if self.new_step == True and self.args.strict_schedule:
+                                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                    self.schedule('reduce-scatter', cur_cycle + 1)
+                            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                self.schedule('reduce-scatter', cur_cycle + 1)
+                    break # finish one timestep, should retry later
             else:
                 break
     # end of reduce_scatter_evaluate()
@@ -751,6 +805,7 @@ class HMC(SimObject):
             return HMC.model_aggregation_cycles
 
         else:
+            # TODO: change me
             return 1
             flow, child, num_sub_messages = self.pending_aggregations[0]
             data_size = num_sub_messages * self.sub_message_size // self.bytes_per_param  # NO. params
