@@ -90,7 +90,8 @@ class HMC(SimObject):
         self.model = model
         if self.message_size == 0:
             self.base_num_messages = 1
-            self.base_num_sub_messages = math.ceil(self.model.size * self.bytes_per_param /
+            #self.base_num_sub_messages = math.ceil(self.model.size * self.bytes_per_param /
+            self.base_num_sub_messages = math.ceil(self.model.layer_size[0] * self.bytes_per_param /
                     self.sub_message_size / self.args.num_hmcs)
             # 58 is from message-buffer-size of 32, booksim-message-buffer size 16,
             # and booksim-injection-queue of 80-flit depth
@@ -100,7 +101,8 @@ class HMC(SimObject):
                 self.estimated_steptime = self.base_num_sub_messages * 16 - 58 * 16
         else:
             assert self.message_size >= self.sub_message_size
-            self.base_num_messages = math.ceil(self.model.size * self.bytes_per_param /
+            #self.base_num_messages = math.ceil(self.model.size * self.bytes_per_param /
+            self.base_num_messages = math.ceil(self.model.layer_size[0] * self.bytes_per_param /
                     self.message_size / self.args.num_hmcs)
             self.base_num_sub_messages = math.ceil(self.message_size / self.sub_message_size)
             if self.base_num_messages <= 58:

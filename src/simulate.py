@@ -315,10 +315,32 @@ def main():
     # dump configuration and results
     sim = {}
     sim['configuration'] = vars(args)
+
+    sim['model'] = {}
+    sim['model']['num-layers'] = model.num_layers
+
     sim['results'] = {}
 
     sim['results']['performance'] = {}
-    sim['results']['performance']['training'] = compute_cycles
+    #sim['results']['performance']['training'] = compute_cycles
+    sim['results']['performance']['training'] = {}
+    sim['results']['performance']['training']['forward'] = {}
+    sim['results']['performance']['training']['backward'] = {}
+    forward_cycles = 0
+    backward_cycles = 0
+    samples_per_npu = math.ceil(args.mini_batch_size / (args.num_vaults * args.num_hmcs))
+    for l in range(model.num_layers):
+        layer = 'layer_{}'.format(l)
+        layer_forward_cycles = model.inference_layer_wise_cycles[l] * samples_per_npu
+        layer_backward_cycles = model.backprop_layer_wise_cycles[l] * samples_per_npu
+        forward_cycles += layer_forward_cycles
+        backward_cycles += layer_backward_cycles
+        sim['results']['performance']['training']['forward'][layer] = layer_forward_cycles
+        sim['results']['performance']['training']['backward'][layer] = layer_backward_cycles
+    sim['results']['performance']['training']['forward']['total'] = forward_cycles
+    sim['results']['performance']['training']['backward']['total'] = backward_cycles
+    sim['results']['performance']['training']['aggregation'] = HMC.model_aggregation_cycles
+    sim['results']['performance']['training']['total'] = compute_cycles
     sim['results']['performance']['allreduce'] = {}
     sim['results']['performance']['allreduce']['computation'] = allreduce_compute_cycles
     sim['results']['performance']['allreduce']['communication'] = pure_communication_cycles

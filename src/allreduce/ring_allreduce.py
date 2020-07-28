@@ -194,6 +194,7 @@ def test(args):
     if args.gendotfile:
         allreduce.generate_ring_dotfile('ring.dot')
         allreduce.generate_trees_dotfile('ring_trees.dot')
+    print('Ring All-Reduce takes {} timesteps'.format(allreduce.timesteps))
 
 
 if __name__ == '__main__':
@@ -201,6 +202,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--dimension', default=4, type=int,
                         help='network dimension, default is 4')
+    parser.add_argument('--kary', default=2, type=int,
+                        help='generay kary tree, default is 2 (binary)')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
     parser.add_argument('--booksim-network', default='torus',
