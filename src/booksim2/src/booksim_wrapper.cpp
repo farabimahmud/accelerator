@@ -84,14 +84,16 @@ BookSim::~BookSim() {
   if (_power_model) delete _power_model;
 }
 
-int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,  Message::MessageType type, Message::SubMessageType subtype, bool end)
+int BookSim::IssueMessage(int flow, int src, int dest, int id, int msg_size,
+    Message::MessageType type, Message::SubMessageType subtype, int timestep,
+    bool end)
 {
   if (id == -1) {
     assert(subtype == Message::Head || subtype == Message::HeadTail);
     id = _cur_mid;
   }
 
-  Message *message = Message::New(type, subtype, id, flow, src, dest, msg_size, end);
+  Message *message = Message::New(type, subtype, id, flow, src, dest, msg_size, timestep, end);
   if (_traffic_manager->Enqueue(message)) {
     _outstanding_messages++;
     // only increment the global message ID for head or head_tail submessage
@@ -159,7 +161,7 @@ bool BookSim::RunTest()
     int mid = -1;
     Message::MessageType type = (Message::MessageType) RandomInt(Message::MessageType_NUM - 1);
     Message::SubMessageType subtype = Message::Head;
-    mid = IssueMessage(8, src, message_dests[src], mid, 64, type, subtype);
+    mid = IssueMessage(8, src, message_dests[src], mid, 64, type, subtype, 0);
     assert(mid != -1);
     message_ids[src] = mid;
     message_types[src] = type;
@@ -188,7 +190,7 @@ bool BookSim::RunTest()
       } else {
         subtype = Message::Body;
       }
-      mid = IssueMessage(8, src, message_dests[src], mid, 64, type, subtype);
+      mid = IssueMessage(8, src, message_dests[src], mid, 64, type, subtype, 0);
       if (mid != -1) {
         message_sizes[src] -= 64;
       }

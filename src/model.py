@@ -7,7 +7,7 @@ class Model:
         self.args = args
         if args.synthetic_data_size:
             self.size = args.synthetic_data_size
-            assert args.only_allreduce
+            assert args.only_allreduce or args.only_reduce_scatter or args.only_all_gather
         else:
             self.size = 0
             self.num_layers = 0

@@ -15,23 +15,24 @@ class Allreduce(ABC):
         schedules are organized as list of list, the list with lower index
         in the schedule should be scheduled earlier.
         - reduce_scatter_schedule:
-            subflow: ((parent, dest_ni), [dependent flow-children (flow, child)], number of base data copy) // subflow is 'tree' root
+            subflow: ((parent, dest_ni), [dependent flow-children (flow, child)], number of base data copy, timestep) // subflow is 'tree' root
         - all_gather_schedule:
-            subflow: ([(child1, dest_ni1), ..., (child_n, dest_ni_n)], dependent flow-parent (flow, parent), number of base data copy)
+            subflow: ([(child1, dest_ni1), ..., (child_n, dest_ni_n)], dependent flow-parent (flow, parent), number of base data copy, timestep)
         Note: for scatter-reduce and all-gather, all send only one data copy, only depends on same flow
-              for halving-doubling, number of data copy following halving doubling rules, depends across flows
+              for halving-doubling, number of data copy following halving doubling rules, depends across flows.
+              Timestep is used as priority for switch arbitration to enforce the scheduling
         Ring:
             0->1->2->3->0
             reduce_scatter_schedule[0] = [
-                {3: ((1, 0), [], 1)},
-                {2: ((1, 0), [(2, 3)], 1)},
-                {1: ((1, 0), [(1, 3)], 1)},
-                {0: ((None, None), [(0, 3)])} # indicate finish this reduce-scatter
+                {3: ((1, 0), [], 1, 0)},
+                {2: ((1, 0), [(2, 3)], 1, 1)},
+                {1: ((1, 0), [(1, 3)], 1, 2)},
+                {0: ((None, None), [(0, 3), 3])} # indicate finish this reduce-scatter
             ]
             all_gather_schedule[0] = [
-                {0: ([(1, 0)], None, 1)},
-                {3: ([(1, 0)], (3, 3), 1)},
-                {2: ([(1, 0)], (2, 3), 1)}
+                {0: ([(1, 0)], None, 1, 4)},
+                {3: ([(1, 0)], (3, 3), 1, 5)},
+                {2: ([(1, 0)], (2, 3), 1, 6)}
             ]
         MXNet: (only dependencies among children and parent)
               Tree 0      Tree 1        Tree 2        Tree 3
@@ -39,11 +40,11 @@ class Allreduce(ABC):
               0   1       1   3         2   3         3   1
             0  2 1  3   1  0 3  2     2  0 3  1     3  2 1  0
             reduce_scatter_schedule[3] = [
-                {0: ((1, 0), [], 1), 1: ((1, 3), [(1, 2)], 1), 2: ((2, 1), [(2, 1)], 1)},
-                {3: ((None, None), [(3, 1), (3, 2)], 1)}
+                {0: ((1, 0), [], 1, 0), 1: ((1, 3), [(1, 2)], 1, 0), 2: ((2, 1), [(2, 1)], 1, 0)},
+                {3: ((None, None), [(3, 1), (3, 2)], 1, 1)}
             ]
             all_gather_schedule[3] = [
-                {1: ([(2, 1)], (1, 1), 1), 2: ([(1, 0)], (2, 2), 1), 3: ([(2, 2), (1, 2)], None, 1)}
+                {1: ([(2, 1)], (1, 1), 1, 2), 2: ([(1, 0)], (2, 2), 1, 2), 3: ([(2, 2), (1, 2)], None, 1, 2)}
             ]
         MultiTree:
             Timestep    Tree 0      Tree 1        Tree 2        Tree 3
@@ -51,13 +52,13 @@ class Allreduce(ABC):
                 1        1 2         0 3           3 0           2 1
                 0           3           2             1             0
             reduce_scatter_schedule[0] = [
-                {3: ((1, 0), [], 1)}                      # step 1
-                {1: ((1, 1), [], 1), 2: ((2, 0), [(2, 1)], 1)} # step 2
-                {0: ((None, None), [(0, 2), (0, 1)], 1)}
+                {3: ((1, 0), [], 1, 0)}                            # step 1
+                {1: ((1, 1), [], 1, 1), 2: ((2, 0), [(2, 1)], 1, 1)}  # step 2
+                {0: ((None, None), [(0, 2), (0, 1)], 1, 2)}
             ]
             all_gather_schedule[0] = [
-                {0: ([(2, 0), (1, 0)], None, 1)}       # step 1
-                {2: ([(1, 0)], (2, 2), 1)}                  # step 2
+                {0: ([(2, 0), (1, 0)], None, 1, 3)}    # step 1
+                {2: ([(1, 0)], (2, 2), 1, 4)}          # step 2
             ]
         HDRM:
         '''

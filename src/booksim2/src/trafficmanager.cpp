@@ -94,6 +94,8 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
         _pri_type = sequence_based;
     } else if ( priority == "none" ) {
         _pri_type = none;
+    } else if ( priority == "schedule" ) {
+        _pri_type = schedule_based;
     } else {
         Error( "Unkown priority value: " + priority );
     }

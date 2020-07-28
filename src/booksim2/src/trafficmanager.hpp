@@ -88,8 +88,6 @@ protected:
 
   // ============ Message priorities ============
 
-  enum ePriority { class_based, age_based, network_age_based, local_age_based, queue_length_based, hop_count_based, sequence_based, none };
-
   ePriority _pri_type;
 
   // ============ Injection VC states  ============
@@ -294,7 +292,7 @@ protected:
 public:
 
   static TrafficManager * New(Configuration const & config,
-			      vector<Network *> const & net);
+      vector<Network *> const & net);
 
   TrafficManager( const Configuration &config, const vector<Network *> & net );
   virtual ~TrafficManager( );

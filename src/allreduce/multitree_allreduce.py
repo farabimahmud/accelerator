@@ -147,7 +147,9 @@ class MultiTreeAllreduce(Allreduce):
                         if sort:
                             #print('before sorting: {}'.format(sorted_roots))
                             #print('conflicts: {}'.format(conflicts))
-                            sorted_roots = [root for _ , root in sorted(zip(conflicts, sorted_roots), reverse=True)]
+                            sorted_roots = list(range(self.network.nodes))
+                            sorted_roots = [root for _ , root in sorted(zip(self.network.priority, sorted_roots), reverse=True)]
+                            #sorted_roots = [root for _ , root in sorted(zip(conflicts, sorted_roots), reverse=True)]
                             conflicts = [0] * self.network.nodes
                             #print('after sorting: {}'.format(sorted_roots))
 
@@ -243,7 +245,7 @@ class MultiTreeAllreduce(Allreduce):
                 if rs_timestep not in reduce_scatter_schedule[rs_child].keys():
                     reduce_scatter_schedule[rs_child][rs_timestep] = {}
                 flow_children = [(root, child) for child in self.trees_children[root][rs_child]]
-                reduce_scatter_schedule[rs_child][rs_timestep][root] = ((rs_parent, reduce_scatter_ni[rs_parent][rs_timestep]), flow_children, 1)
+                reduce_scatter_schedule[rs_child][rs_timestep][root] = ((rs_parent, reduce_scatter_ni[rs_parent][rs_timestep]), flow_children, 1, rs_timestep)
                 reduce_scatter_ni[rs_parent][rs_timestep] = (reduce_scatter_ni[rs_parent][rs_timestep] + 1) % self.args.radix
 
                 # all-gather
@@ -257,15 +259,39 @@ class MultiTreeAllreduce(Allreduce):
                 if root not in all_gather_schedule[ag_parent][ag_timestep].keys():
                     if ag_parent == root:
                         assert self.trees_parent[root][ag_parent] == None
-                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1)
+                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1, self.timesteps)
                     else:
-                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], (root, self.trees_parent[root][ag_parent]), 1)
+                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], (root, self.trees_parent[root][ag_parent]), 1, ag_timestep + self.timesteps)
                 all_gather_schedule[ag_parent][ag_timestep][root][0].append((ag_child, all_gather_ni[ag_child][ag_timestep]))
                 all_gather_ni[ag_child][ag_timestep] = (all_gather_ni[ag_child][ag_timestep] + 1) % self.args.radix
 
         # initialize the schedules
         self.reduce_scatter_schedule = {}
         self.all_gather_schedule = {}
+
+        # TODO: for debugging, cleanup later
+        filename = 'reduce_scatter_schedule.csv'
+        with open(filename, 'w') as outfile:
+            string = 'timestep,'
+            for node in range(self.network.nodes):
+                string += 'NPU {},,,,'.format(node)
+            string += '\n'
+            outfile.write(string)
+
+            for timestep in range(self.timesteps):
+                string = '{},'.format(timestep)
+                for node in range(self.network.nodes):
+                    messages = 0
+                    if timestep in reduce_scatter_schedule[node].keys():
+                        for i, (subflow, schedule) in enumerate(reduce_scatter_schedule[node][timestep].items()):
+                            string += '{}-{},'.format(subflow, schedule[0][0])
+                            messages += 1
+                    for j in range(messages, 4):
+                        string += ','
+                string += '\n'
+                outfile.write(string)
+
+            outfile.close()
 
         for node in range(self.network.nodes):
             self.reduce_scatter_schedule[node] = []
@@ -282,7 +308,7 @@ class MultiTreeAllreduce(Allreduce):
                     if verbose:
                         print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
             flow_children = [(node, child) for child in self.trees_children[node][node]]
-            self.reduce_scatter_schedule[node].append({node: ((None, None), flow_children, 0)})
+            self.reduce_scatter_schedule[node].append({node: ((None, None), flow_children, 0, self.timesteps)})
             if verbose:
                 print('    root children: {}'.format(self.reduce_scatter_schedule[node][-1]))
 
@@ -294,7 +320,8 @@ class MultiTreeAllreduce(Allreduce):
                     if verbose:
                         print('    timestep {}: {}'.format(timestep, all_gather_schedule[node][timestep]))
                 else:
-                    print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
+                    if verbose:
+                        print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
     # def generate_schedule(self, verbose=False)
 
 
@@ -304,15 +331,15 @@ def test(args):
     kary = args.kary
     allreduce = MultiTreeAllreduce(args, network)
     # NOTE: sorted doesn't help for multitree since it only considers available links
-    allreduce.compute_trees(kary, alternate=True, sort=False, verbose=True)
+    allreduce.compute_trees(kary, alternate=True, sort=False, verbose=args.verbose)
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree.dot')
     timesteps = allreduce.timesteps
-    allreduce.generate_schedule(verbose=False)
-    allreduce.compute_trees(kary, alternate=True, sort=True)
+    allreduce.generate_schedule(verbose=args.verbose)
+    allreduce.compute_trees(kary, alternate=True, sort=True, verbose=args.verbose)
     if args.gendotfile:
         allreduce.generate_trees_dotfile('multitree_sort.dot')
-        allreduce.generate_per_tree_dotfile('multitreedot')
+        #allreduce.generate_per_tree_dotfile('multitreedot')
     sort_timesteps = allreduce.timesteps
     allreduce.generate_schedule()
     allreduce.max_num_concurrent_flows()
@@ -337,6 +364,8 @@ if __name__ == '__main__':
                         help='node radix, default is 4')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
+    parser.add_argument('--verbose', default=False, action='store_true',
+                        help='detailed print')
     parser.add_argument('--bigraph-m', default=4, type=int,
                         help='logical groups size (# sub-node per switch')
     parser.add_argument('--bigraph-n', default=8, type=int,

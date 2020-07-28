@@ -11,6 +11,16 @@ class KNCube(Network):
         assert args.nodes == self.dimension * self.dimension
         if mesh == True:
             self.type = 'Mesh'
+            corners = [0, self.dimension - 1, self.nodes - self.dimension, self.nodes - 1]
+            for node in range(self.nodes):
+                row = node // self.dimension
+                col = node % self.dimension
+                depth = 0
+                for corner in corners:
+                    distance = self.distance(node, corner)
+                    if depth < distance:
+                        depth = distance
+                self.priority[node] = depth
         else:
             self.type = 'Torus'
 
