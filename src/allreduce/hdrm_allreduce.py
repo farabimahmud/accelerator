@@ -156,8 +156,8 @@ class HDRMAllreduce(Allreduce):
                 node2 = self.rank_map[rank2]
                 parent1 = node2
                 parent2 = node1
-                self.reduce_scatter_schedule[node1].append({node2: ((parent1, 0), child[rank1], num_data_copy)})
-                self.reduce_scatter_schedule[node2].append({node1: ((parent2, 0), child[rank2], num_data_copy)})
+                self.reduce_scatter_schedule[node1].append({node2: ((parent1, 0), child[rank1], num_data_copy, step)})
+                self.reduce_scatter_schedule[node2].append({node1: ((parent2, 0), child[rank2], num_data_copy, step)})
                 # form the dependent flow-child for the next step
                 child[rank1] = [(node1, node2)]
                 child[rank2] = [(node2, node1)]
@@ -168,7 +168,7 @@ class HDRMAllreduce(Allreduce):
                 print('')
 
         for rank in range(self.network.nodes):
-            self.reduce_scatter_schedule[self.rank_map[rank]].append({self.rank_map[rank]: ((None, None), child[rank], 0)})
+            self.reduce_scatter_schedule[self.rank_map[rank]].append({self.rank_map[rank]: ((None, None), child[rank], self.timesteps)})
 
         if verbose:
             print('Recursive doubling all-gather:')
@@ -185,8 +185,8 @@ class HDRMAllreduce(Allreduce):
                 node2 = self.rank_map[rank2]
                 child1 = node2
                 child2 = node1
-                self.all_gather_schedule[node1].append({node1: ([(child1, 0)], parent[rank1], num_data_copy)})
-                self.all_gather_schedule[node2].append({node2: ([(child2, 0)], parent[rank2], num_data_copy)})
+                self.all_gather_schedule[node1].append({node1: ([(child1, 0)], parent[rank1], num_data_copy, step + self.timesteps)})
+                self.all_gather_schedule[node2].append({node2: ([(child2, 0)], parent[rank2], num_data_copy, step + self.timesteps)})
                 # form the dependent flow-parent for the next step
                 parent[rank1] = (node2, node2)
                 parent[rank2] = (node1, node1)

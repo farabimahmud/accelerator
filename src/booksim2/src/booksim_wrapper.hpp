@@ -16,7 +16,9 @@ public:
   BookSim(string const & configfile);
   ~BookSim();
 
-  int IssueMessage(int flow, int src, int dest, int id, int msg_size, Message::MessageType type, Message::SubMessageType subtype, bool end = false); // msg_size: bytes
+  int IssueMessage(int flow, int src, int dest, int id, int msg_size,
+      Message::MessageType type, Message::SubMessageType subtype, int timestep,
+      bool end = true); // msg_size: bytes
   tuple<int, int, Message::MessageType, bool> PeekMessage(int node, int vnet);
   void DequeueMessage(int node, int vnet);
   void CalculatePower();

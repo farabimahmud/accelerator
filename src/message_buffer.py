@@ -4,7 +4,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Message:
-    def __init__(self, flow, mid, src, dest, size, msgtype, submsgtype, end=False):
+    '''
+    @priority: lower the number, higher the priority
+    '''
+    def __init__(self, flow, mid, src, dest, size, msgtype, submsgtype, priority=0, end=False):
         self.flow = flow
         self.id = mid
         self.src = src
@@ -13,6 +16,7 @@ class Message:
         self.type = msgtype
         self.submsgtype = submsgtype
         self.end = end
+        self.priority = priority
 
 
 class MessageBuffer:

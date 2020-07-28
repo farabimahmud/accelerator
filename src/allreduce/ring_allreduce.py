@@ -120,21 +120,21 @@ class RingAllreduce(Allreduce):
 
             # reduce-scatter scheduled from 'leaf'
             rs_subflow = child
-            self.reduce_scatter_schedule[node].append({rs_subflow: ((parent, 0), [], 1)})
+            self.reduce_scatter_schedule[node].append({rs_subflow: ((parent, 0), [], 1, 0)})
             # all-gather scheduled from 'root'
             ag_subflow = node
-            self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], None, 1)})
+            self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], None, self.network.nodes - 1)})
             # add remianing schedules
             for i in range(self.network.nodes - 2):
                 # reduce-scatter
                 rs_subflow = self.ring[(index + i + 2) % self.network.nodes]
-                self.reduce_scatter_schedule[node].append({rs_subflow: ((parent, 0), [(rs_subflow, child)], 1)})
+                self.reduce_scatter_schedule[node].append({rs_subflow: ((parent, 0), [(rs_subflow, child)], 1, i + 1)})
 
                 # all-gather
                 ag_subflow = self.ring[index - i - 1]
-                self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], (ag_subflow, parent), 1)})
+                self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], (ag_subflow, parent), 1, i + self.network.nodes)})
 
-            self.reduce_scatter_schedule[node].append({node: ((None, None), [(node, child)], 0)})
+            self.reduce_scatter_schedule[node].append({node: ((None, None), [(node, child)], 0, self.network.nodes - 1)})
 
             if verbose:
                 print('Accelerator {}:'.format(node))

@@ -63,6 +63,8 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
   int packet_dest = message->dest;
   bool record = true;
 
+  int timestep = message->timestep;
+
   bool watch = gWatchOut && (_packets_to_watch.count(_cur_pid) > 0);
   watch |= _watch_all_packets;
 
@@ -156,6 +158,9 @@ void ScaleTrafficManager::_GeneratePacket(int source, int stype, int vnet, int t
       case sequence_based:
         f->pri = numeric_limits<int>::max() - _packet_seq_no[source];
         break;
+      case schedule_based:
+        f->pri = numeric_limits<int>::max() - timestep;
+        break;
       default:
         f->pri = 0;
     }
@@ -211,11 +216,12 @@ void ScaleTrafficManager::_Inject()
           _GeneratePacket(input, packet_type, vnet, _time);
           if (_watch_all_packets) {
             *gWatchOut << GetSimTime() << " | " << FullName()
-              << " | " << "HMC-" << input;
+              << " | " << "HMC-" << input / gC << " (NI " << input % gC
+              << ") to HMC-" << message->dest / gC << " (NI " << message->dest % gC << ")";
             if (message->subtype == Message::Head || message->subtype == Message::HeadTail) {
-              *gWatchOut << " generate a new packet for message: " << endl;
+              *gWatchOut << " generate a new packet for message:" << endl;
             } else {
-              *gWatchOut << " generate a new subpacket for message: " << endl;
+              *gWatchOut << " generate a new subpacket for message:" << endl;
             }
             *gWatchOut << *message;
           }
@@ -426,78 +432,78 @@ void ScaleTrafficManager::_Step()
             f = cf;
           }
         }
+      }
 
-        if (f) {
+      if (f) {
 
-          assert(f->subnetwork == subnet);
+        assert(f->subnetwork == subnet);
 
-          int const c = f->cl;
+        int const c = f->cl;
 
-          if (f->head) {
+        if (f->head) {
 
-            if (_lookahead_routing) {
-              if (!_noq) {
-                const FlitChannel * inject = _net[subnet]->GetInject(n);
-                const Router * router = inject->GetSink();
-                assert(router);
-                int in_channel = inject->GetSinkPort();
-                _rf(router, f, in_channel, &f->la_route_set, false);
-                if (f->watch) {
-                  *gWatchOut << GetSimTime() << " | "
-                    << "node" << n << " | "
-                    << "Generating lookahead routing info for flit " << f->id
-                    << "." << endl;
-                }
-              } else if (f->watch) {
+          if (_lookahead_routing) {
+            if (!_noq) {
+              const FlitChannel * inject = _net[subnet]->GetInject(n);
+              const Router * router = inject->GetSink();
+              assert(router);
+              int in_channel = inject->GetSinkPort();
+              _rf(router, f, in_channel, &f->la_route_set, false);
+              if (f->watch) {
                 *gWatchOut << GetSimTime() << " | "
                   << "node" << n << " | "
-                  << "Already generated lookahead routing info for flit " << f->id
-                  << " (NOQ)." << endl;
+                  << "Generating lookahead routing info for flit " << f->id
+                  << "." << endl;
               }
-            } else {
-              f->la_route_set.Clear();
+            } else if (f->watch) {
+              *gWatchOut << GetSimTime() << " | "
+                << "node" << n << " | "
+                << "Already generated lookahead routing info for flit " << f->id
+                << " (NOQ)." << endl;
             }
-
-            dest_buf->TakeBuffer(f->vc);
-            _last_vc[n][subnet][c] = f->vc;
+          } else {
+            f->la_route_set.Clear();
           }
 
-          _last_class[n][subnet] = c;
+          dest_buf->TakeBuffer(f->vc);
+          _last_vc[n][subnet][c] = f->vc;
+        }
 
-          _partial_packets[n][c].pop_front();
+        _last_class[n][subnet] = c;
+
+        _partial_packets[n][c].pop_front();
 
 #ifdef TRACK_FLOWS
-          ++_outstainding_credits[c][subnet][n];
-          _outstanding_classes[n][subnet][f->vc].push(c);
+        ++_outstainding_credits[c][subnet][n];
+        _outstanding_classes[n][subnet][f->vc].push(c);
 #endif
-          dest_buf->SendingFlit(f);
+        dest_buf->SendingFlit(f);
 
-          if (_pri_type == network_age_based) {
-            f->pri = numeric_limits<int>::max() - _time;
-            assert(f->pri >= 0);
-          }
+        if (_pri_type == network_age_based) {
+          f->pri = numeric_limits<int>::max() - _time;
+          assert(f->pri >= 0);
+        }
 
-          if (f->watch) {
-            *gWatchOut << GetSimTime() << " | "
-              << "node" << n << " | "
-              << "Injecting flit " << f->id
-              << " into subnet " << subnet
-              << " at time " << _time
-              << " with priority " << f->pri
-              << "." << endl;
-          }
-          f->itime = _time;
+        if (f->watch) {
+          *gWatchOut << GetSimTime() << " | "
+            << "node" << n << " | "
+            << "Injecting flit " << f->id
+            << " into subnet " << subnet
+            << " at time " << _time
+            << " with priority " << f->pri
+            << "." << endl;
+        }
+        f->itime = _time;
 
-          // Pass VC "back"
-          if (!_partial_packets[n][c].empty() && !f->tail) {
-            Flit * const nf = _partial_packets[n][c].front();
-            nf->vc = f->vc;
-          }
+        // Pass VC "back"
+        if (!_partial_packets[n][c].empty() && !f->tail) {
+          Flit * const nf = _partial_packets[n][c].front();
+          nf->vc = f->vc;
+        }
 
-          ++_sent_flits[c][n];
-          if (f->head) {
-            ++_sent_packets[c][n];
-          }
+        ++_sent_flits[c][n];
+        if (f->head) {
+          ++_sent_packets[c][n];
         }
 
 #ifdef TRACK_FLOWS

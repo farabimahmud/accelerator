@@ -56,7 +56,7 @@ class BookSim(SimObject):
                     dest_ni = message.dest % self.args.radix
                     assert src == i
                     assert src_ni == j
-                    msg_id = self.booksim.IssueMessage(message.flow, message.src, message.dest, message.id, message.size, message.type, message.submsgtype, message.end)
+                    msg_id = self.booksim.IssueMessage(message.flow, message.src, message.dest, message.id, message.size, message.type, message.submsgtype, message.priority, message.end)
                     if msg_id == -1:
                         self.schedule(self, cur_cycle + 1)
                         continue
@@ -77,7 +77,7 @@ class BookSim(SimObject):
                     src_ni = src_node % self.args.radix
                     if self.out_message_buffers[i][j].is_full():
                         continue
-                    message = Message(flow, None, src_node, dest_node, self.args.sub_message_size, msgtype, None, end)
+                    message = Message(flow, None, src_node, dest_node, self.args.sub_message_size, msgtype, None, 0, end)
                     self.out_message_buffers[i][j].enqueue(message, cur_cycle, 1)
                     self.booksim.DequeueMessage(dest_node, 0)
                     #print('{} | {} | peek a {} message for flow {} to HMC-{} (NI {}) from HMC-{} (NI {})'.format(cur_cycle, self.name, msgtype, flow, i, j, src, src_ni))

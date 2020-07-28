@@ -42,13 +42,17 @@ public:
   int src;
   int dest;
 
+  int timestep;
+
   bool end; // indication of ending of communication flow
 
   void Reset();
-  void Set(MessageType type, SubMessageType subtype, int id, int flow, int src, int dest, int size, bool end = false);
+  void Set(MessageType type, SubMessageType subtype, int id, int flow, int src,
+      int dest, int size, int timestep, bool end = true);
 
   static Message *New();
-  static Message *New(MessageType type, SubMessageType subtype, int id, int flow, int src, int dest, int size, bool end = false);
+  static Message *New(MessageType type, SubMessageType subtype, int id, int
+      flow, int src, int dest, int size, int timestep, bool end = true);
   static string MessageTypeToString(const MessageType &type);
   static string SubMessageTypeToString(const SubMessageType &type);
   static int GetVirtualNetwork(const MessageType &type);

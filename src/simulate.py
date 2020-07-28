@@ -80,6 +80,10 @@ def init():
                         help='Set the flag to only run training computation without allreduce')
     parser.add_argument('--only-allreduce', default=False, action='store_true',
                         help='Set the flag to only run allreduce communication')
+    parser.add_argument('--only-reduce-scatter', default=False, action='store_true',
+                        help='Set the flag to only run reduce-scatter communication')
+    parser.add_argument('--only-all-gather', default=False, action='store_true',
+                        help='Set the flag to only run all-gather communication')
     parser.add_argument('--message-buffer-size', default=0, type=int,
                         help='message buffer size, default is 0 (infinite)')
     parser.add_argument('--message-size', default=256, type=int,
@@ -88,10 +92,18 @@ def init():
                         help='size of a sub message, default is 256 bytes')
     parser.add_argument('--strict-schedule', default=False, action='store_true',
                         help='strict schedule, default=False')
+    parser.add_argument('--prioritize-schedule', default=False, action='store_true',
+                        help='prioritize for arbitration to enforce schedule sequencing, default=False')
+    parser.add_argument('--oracle-lockstep', default=False, action='store_true',
+                        help='magic lockstep with zero overhead')
+    parser.add_argument('--estimate-lockstep', default=False, action='store_true',
+                        help='estimate message finished time based on data size to achieve lockstep')
     parser.add_argument('--synthetic-data-size', default=0, type=int,
                         help='synthetic data size in number of parameters, default is 0 (run model)')
 
     args = parser.parse_args()
+
+    assert not (args.oracle_lockstep and args.estimate_lockstep)
 
     if args.outdir:
         args.logdir = args.outdir
@@ -283,7 +295,12 @@ def main():
 
     assert network.booksim.Idle()
     for i, hmc in enumerate(hmcs):
-        if not args.only_compute:
+        if args.only_reduce_scatter:
+            assert len(hmc.pending_aggregations) == 0
+            assert len(hmc.reduce_scatter_schedule) == 0
+        elif args.only_all_gather:
+            assert len(hmc.all_gather_schedule) == 0
+        elif not args.only_compute:
             assert len(hmc.pending_aggregations) == 0
             assert len(hmc.reduce_scatter_schedule) == 0
             assert len(hmc.all_gather_schedule) == 0

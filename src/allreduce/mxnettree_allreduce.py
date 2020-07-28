@@ -1463,7 +1463,7 @@ class MXNetTreeAllreduce(Allreduce):
 
         for node in range(self.network.nodes):
             flow_children = [(node, child) for child in self.trees_children[node][node]]
-            self.reduce_scatter_schedule[node] = [{}, {node: ((None, None), flow_children, 0)}]
+            self.reduce_scatter_schedule[node] = [{}, {node: ((None, None), flow_children, 0, 1)}]
             self.all_gather_schedule[node] = [{}]
 
         reduce_scatter_ni = np.zeros(self.network.nodes, dtype=int)
@@ -1478,13 +1478,13 @@ class MXNetTreeAllreduce(Allreduce):
                     for child, parent in child_parent_row:
                         # TODO: It seems dict is ordered by key in python implementation, may optimize later
                         flow_children = [(root, child) for child in self.trees_children[root][child]]
-                        self.reduce_scatter_schedule[child][0][root] = ((parent, reduce_scatter_ni[parent]), flow_children, 1)
+                        self.reduce_scatter_schedule[child][0][root] = ((parent, reduce_scatter_ni[parent]), flow_children, 1, 0)
                         reduce_scatter_ni[parent] = (reduce_scatter_ni[parent] + 1) % self.args.radix
                         if root not in self.all_gather_schedule[parent][0].keys():
                             if self.trees_parent[root][parent] == None:
-                                self.all_gather_schedule[parent][0][root] = ([], None, 1)
+                                self.all_gather_schedule[parent][0][root] = ([], None, 1, 1)
                             else:
-                                self.all_gather_schedule[parent][0][root] = ([], (root, self.trees_parent[root][parent]), 1)
+                                self.all_gather_schedule[parent][0][root] = ([], (root, self.trees_parent[root][parent]), 1, 1)
                         self.all_gather_schedule[parent][0][root][0].append((child, all_gather_ni[child]))
                         all_gather_ni[child] = (all_gather_ni[child] + 1) % self.args.radix
                         change = True

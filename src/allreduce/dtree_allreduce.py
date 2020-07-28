@@ -174,9 +174,9 @@ class DTreeAllreduce(Allreduce):
                     #self.all_gather_schedule[node].append({self.tree0_root: (children, parent)})
                     for sub_flow in range(self.network.nodes // 2):
                         if parent == None:
-                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, None, 1))})
+                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, None, 1, 1))}) # TODO: data copy may be more than 1
                         else:
-                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, (sub_flow, parent), 1))})
+                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, (sub_flow, parent), 1, 1))})
             for node in current_level1:
                 parent, child0, child1 = self.dtree[node][1]
                 if parent == -1:
@@ -190,9 +190,9 @@ class DTreeAllreduce(Allreduce):
                     #self.all_gather_schedule[node].append({self.tree1_root: (children, parent)})
                     for sub_flow in range(self.network.nodes // 2, self.network.nodes):
                         if parent == None:
-                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, None, 1))})
+                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, None, 1, 1))})
                         else:
-                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, (sub_flow, parent), 1))})
+                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, (sub_flow, parent), 1, 1))})
 
             current_reversed_level0 = self.tree0[height - l - 1]
             current_reversed_level1 = self.tree1[height - l - 1]
@@ -200,8 +200,10 @@ class DTreeAllreduce(Allreduce):
                 parent, child0, child1 = self.dtree[node][0]
                 if parent == -1:
                     parent = (None, None)
+                    timestep = 1
                 else:
                     parent = (parent, 0)
+                    timestep = 0
                 children = []
                 if child0 != -1:
                     children.append(child0)
@@ -213,13 +215,15 @@ class DTreeAllreduce(Allreduce):
                         flow_children = [(sub_flow, child) for child in children]
                     else:
                         flow_children = []
-                    self.reduce_scatter_schedule[node].append({sub_flow: deepcopy((parent, flow_children, 1))})
+                    self.reduce_scatter_schedule[node].append({sub_flow: deepcopy((parent, flow_children, 1, timestep))})
             for node in current_reversed_level1:
                 parent, child0, child1 = self.dtree[node][1]
                 if parent == -1:
                     parent = (None, None)
+                    timestep = 1
                 else:
                     parent = (parent, 0)
+                    timestep = 0
                 children = []
                 if child0 != -1:
                     children.append(child0)
@@ -231,7 +235,7 @@ class DTreeAllreduce(Allreduce):
                         flow_children = [(sub_flow, child) for child in children]
                     else:
                         flow_children = []
-                    self.reduce_scatter_schedule[node].append({sub_flow: deepcopy((parent, flow_children, 1))})
+                    self.reduce_scatter_schedule[node].append({sub_flow: deepcopy((parent, flow_children, 1, timestep))})
 
         if verbose:
             for node in range(self.network.nodes):
