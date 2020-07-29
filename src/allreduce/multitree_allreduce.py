@@ -270,6 +270,7 @@ class MultiTreeAllreduce(Allreduce):
         self.all_gather_schedule = {}
 
         # TODO: for debugging, cleanup later
+        '''
         filename = 'reduce_scatter_schedule.csv'
         with open(filename, 'w') as outfile:
             string = 'timestep,'
@@ -292,6 +293,7 @@ class MultiTreeAllreduce(Allreduce):
                 outfile.write(string)
 
             outfile.close()
+        '''
 
         for node in range(self.network.nodes):
             self.reduce_scatter_schedule[node] = []

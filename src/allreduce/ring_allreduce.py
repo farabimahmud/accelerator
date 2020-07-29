@@ -123,7 +123,7 @@ class RingAllreduce(Allreduce):
             self.reduce_scatter_schedule[node].append({rs_subflow: ((parent, 0), [], 1, 0)})
             # all-gather scheduled from 'root'
             ag_subflow = node
-            self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], None, self.network.nodes - 1)})
+            self.all_gather_schedule[node].append({ag_subflow: ([(child, 0)], None, 1, self.network.nodes - 1)})
             # add remianing schedules
             for i in range(self.network.nodes - 2):
                 # reduce-scatter

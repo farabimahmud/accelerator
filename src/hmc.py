@@ -772,7 +772,8 @@ class HMC(SimObject):
                             if flow_parent == schedules[fl][1]: # from depending flow-parent
                                 children = self.all_gather_schedule[i][fl][0]
                                 num_data_copy = self.all_gather_schedule[i][fl][2]
-                                self.all_gather_schedule[i][fl] = (children, None, num_data_copy)
+                                timestep = self.all_gather_schedule[i][fl][3]
+                                self.all_gather_schedule[i][fl] = (children, None, num_data_copy, timestep)
                     if self.communication_state == 'all-gather':
                         if self.new_step == True and self.args.strict_schedule:
                             if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
