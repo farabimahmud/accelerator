@@ -190,9 +190,9 @@ class DTreeAllreduce(Allreduce):
                     #self.all_gather_schedule[node].append({self.tree1_root: (children, parent)})
                     for sub_flow in range(self.network.nodes // 2, self.network.nodes):
                         if parent == None:
-                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, None, 1, 1))})
+                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, None, 1, 2))})
                         else:
-                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, (sub_flow, parent), 1, 1))})
+                            self.all_gather_schedule[node].append({sub_flow: deepcopy((children, (sub_flow, parent), 1, 2))})
 
             current_reversed_level0 = self.tree0[height - l - 1]
             current_reversed_level1 = self.tree1[height - l - 1]

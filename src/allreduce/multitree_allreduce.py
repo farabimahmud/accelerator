@@ -259,41 +259,15 @@ class MultiTreeAllreduce(Allreduce):
                 if root not in all_gather_schedule[ag_parent][ag_timestep].keys():
                     if ag_parent == root:
                         assert self.trees_parent[root][ag_parent] == None
-                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1, self.timesteps)
+                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1, self.timesteps + 1)
                     else:
-                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], (root, self.trees_parent[root][ag_parent]), 1, ag_timestep + self.timesteps)
+                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], (root, self.trees_parent[root][ag_parent]), 1, ag_timestep + self.timesteps + 1)
                 all_gather_schedule[ag_parent][ag_timestep][root][0].append((ag_child, all_gather_ni[ag_child][ag_timestep]))
                 all_gather_ni[ag_child][ag_timestep] = (all_gather_ni[ag_child][ag_timestep] + 1) % self.args.radix
 
         # initialize the schedules
         self.reduce_scatter_schedule = {}
         self.all_gather_schedule = {}
-
-        # TODO: for debugging, cleanup later
-        '''
-        filename = 'reduce_scatter_schedule.csv'
-        with open(filename, 'w') as outfile:
-            string = 'timestep,'
-            for node in range(self.network.nodes):
-                string += 'NPU {},,,,'.format(node)
-            string += '\n'
-            outfile.write(string)
-
-            for timestep in range(self.timesteps):
-                string = '{},'.format(timestep)
-                for node in range(self.network.nodes):
-                    messages = 0
-                    if timestep in reduce_scatter_schedule[node].keys():
-                        for i, (subflow, schedule) in enumerate(reduce_scatter_schedule[node][timestep].items()):
-                            string += '{}-{},'.format(subflow, schedule[0][0])
-                            messages += 1
-                    for j in range(messages, 4):
-                        string += ','
-                string += '\n'
-                outfile.write(string)
-
-            outfile.close()
-        '''
 
         for node in range(self.network.nodes):
             self.reduce_scatter_schedule[node] = []

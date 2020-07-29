@@ -142,7 +142,10 @@ class HMC(SimObject):
         if self.args.oracle_lockstep:
             if HMC.allreduce_timestep == None:
                 HMC.allreduce_timestep = 0
-                HMC.allreduce_remaining_for_timestep = [0] * allreduce.timesteps
+                HMC.allreduce_remaining_for_timestep = [0] * (allreduce.timesteps * 2 + 1)
+                if self.args.only_all_gather:
+                    HMC.allreduce_timestep = allreduce.timesteps + 1
+
         self.allreduce = allreduce
         self.reduce_scatter_schedule = deepcopy(allreduce.reduce_scatter_schedule[self.id])
         self.all_gather_schedule = deepcopy(allreduce.all_gather_schedule[self.id])
@@ -151,8 +154,14 @@ class HMC(SimObject):
                 if schedules == None:
                     continue
                 for fl, schedule in schedules.items():
-                    if schedule[2] != 0:
-                        HMC.allreduce_remaining_for_timestep[schedule[3]] += 1
+                    HMC.allreduce_remaining_for_timestep[schedule[3]] += 1
+            for i, schedules in enumerate(self.all_gather_schedule):
+                if schedules == None:
+                    continue
+                for fl, schedule in schedules.items():
+                    assert schedule[2] != 0
+                    HMC.allreduce_remaining_for_timestep[schedule[3]] += len(schedule[0])
+
         for root in range(self.args.num_hmcs):
             for child in allreduce.trees_children[root][self.id]:
                 self.messages_received['reduce-scatter'][root][child] = 0
@@ -424,7 +433,6 @@ class HMC(SimObject):
                 if self.args.oracle_lockstep:
                     if timestep != HMC.allreduce_timestep:
                         break
-                    assert timestep == HMC.allreduce_timestep
                 self.reduce_scatter_schedule[0].pop(send_flow)
                 if parent != None:
                     assert dest_ni != None
@@ -449,6 +457,13 @@ class HMC(SimObject):
                                     self.schedule('reduce-scatter', cur_cycle + 1)
                             elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
                                 self.schedule('reduce-scatter', cur_cycle + 1)
+                if self.args.oracle_lockstep and len(self.reduce_scatter_schedule) == 0:
+                    HMC.allreduce_remaining_for_timestep[timestep] -= 1
+                    if HMC.allreduce_remaining_for_timestep[timestep] == 0:
+                        HMC.allreduce_timestep += 1
+                        for hmc in HMC.hmcs:
+                            if hmc.communication_state == 'all-gather':
+                                hmc.schedule('all-gather', cur_cycle + 1)
                     break # finish one timestep, should retry later
             else:
                 break
@@ -584,7 +599,7 @@ class HMC(SimObject):
     def all_gather_evaluate(self, cur_cycle):
         assert self.communication_state == 'all-gather'
         assert len(self.all_gather_schedule) > 0
-        assert len(self.free_nis) > 0
+        #assert len(self.free_nis) > 0 # FIXME: may fail due to oracle-lockstep
         assert len(self.just_allocated_nis) == 0
         if self.new_step == True and self.args.strict_schedule and \
                 len(self.free_nis) != self.args.radix:
@@ -605,6 +620,9 @@ class HMC(SimObject):
                         timestep = schedule[3]
                         break
             if send_flow != None:
+                if self.args.oracle_lockstep:
+                    if timestep != HMC.allreduce_timestep:
+                        break
                 child, dest_ni = self.all_gather_schedule[0][send_flow][0].pop(0)
                 if len(self.all_gather_schedule[0][send_flow][0]) == 0:
                     self.all_gather_schedule[0].pop(send_flow)
@@ -694,6 +712,14 @@ class HMC(SimObject):
                 dest = sending[1]
                 dest_ni = sending[2]
                 timestep = sending[3]
+                if self.args.oracle_lockstep:
+                    HMC.allreduce_remaining_for_timestep[timestep] -= 1
+                    if HMC.allreduce_remaining_for_timestep[timestep] == 0:
+                        HMC.allreduce_timestep += 1
+                        for hmc in HMC.hmcs:
+                            assert hmc.communication_state == 'all-gather' or hmc.communication_state == 'idle'
+                            if hmc.communication_state == 'all-gather' and hmc.id != self.id:
+                                hmc.schedule('all-gather', cur_cycle + 1)
                 logger.info('{} | {} | finishes gather for flow {} (from NI {}) to child HMC-{} (to NI {}) at timestep {}'.format(cur_cycle, self.name, flow, ni, dest, dest_ni, timestep))
                 self.num_messages[ni] = None
                 self.num_sub_messages[ni] = None

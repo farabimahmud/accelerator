@@ -185,8 +185,8 @@ class HDRMAllreduce(Allreduce):
                 node2 = self.rank_map[rank2]
                 child1 = node2
                 child2 = node1
-                self.all_gather_schedule[node1].append({node1: ([(child1, 0)], parent[rank1], num_data_copy, step + self.timesteps)})
-                self.all_gather_schedule[node2].append({node2: ([(child2, 0)], parent[rank2], num_data_copy, step + self.timesteps)})
+                self.all_gather_schedule[node1].append({node1: ([(child1, 0)], parent[rank1], num_data_copy, step + self.timesteps + 1)})
+                self.all_gather_schedule[node2].append({node2: ([(child2, 0)], parent[rank2], num_data_copy, step + self.timesteps + 1)})
                 # form the dependent flow-parent for the next step
                 parent[rank1] = (node2, node2)
                 parent[rank2] = (node1, node1)

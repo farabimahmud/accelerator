@@ -24,7 +24,7 @@ class MXNetTreeAllreduce(Allreduce):
         self.conflict_trees = None
         self.adjacency_matrix = None #deepcopy(self.network.adjacency_matrix)
         self.mxnet_maxdepth = 16
-        self.silent = False
+        self.silent = True
 
 
     '''
@@ -1482,9 +1482,9 @@ class MXNetTreeAllreduce(Allreduce):
                         reduce_scatter_ni[parent] = (reduce_scatter_ni[parent] + 1) % self.args.radix
                         if root not in self.all_gather_schedule[parent][0].keys():
                             if self.trees_parent[root][parent] == None:
-                                self.all_gather_schedule[parent][0][root] = ([], None, 1, 1)
+                                self.all_gather_schedule[parent][0][root] = ([], None, 1, 2)
                             else:
-                                self.all_gather_schedule[parent][0][root] = ([], (root, self.trees_parent[root][parent]), 1, 1)
+                                self.all_gather_schedule[parent][0][root] = ([], (root, self.trees_parent[root][parent]), 1, 2)
                         self.all_gather_schedule[parent][0][root][0].append((child, all_gather_ni[child]))
                         all_gather_ni[child] = (all_gather_ni[child] + 1) % self.args.radix
                         change = True
