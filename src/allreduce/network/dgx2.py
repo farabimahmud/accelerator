@@ -33,6 +33,19 @@ class DGX2(Network):
                 self.switch_to_switch[sw].append(neighbor_sw)
                 self.switch_to_switch[neighbor_sw].append(sw)
 
+        # adjacency list
+        for node in range(self.nodes):
+            self.from_nodes[node] = []
+            self.to_nodes[node] = []
+
+            neighbor_base = 0
+            if node < self.m:
+                neighbor_base = self.m
+            for n in range(self.m):
+                neighbor = n + neighbor_base
+                self.from_nodes[node].append(neighbor)
+                self.to_nodes[node].append(neighbor)
+
         if verbose:
             print('DGX2 Topology:')
             print('  - Node connections:')
@@ -43,6 +56,9 @@ class DGX2(Network):
                 print('    switch {}:'.format(sw))
                 print('      connects to switches {}'.format(self.switch_to_switch[sw]))
                 print('      connects to nodes {}'.format(self.switch_to_node[sw]))
+            print('  - From and To nodes:')
+            for node in range(self.nodes):
+                print('    node {}\'s from nodes {}'.format(node, self.from_nodes[node]))
     # def build_graph(self, filename=None)
 
 
@@ -58,6 +74,10 @@ def test():
     parser.add_argument('--dgx2_c', default=8, type=int,
                         help='logical groups size (# sub-node per switch')
     parser.add_argument('--dgx2_n', default=2, type=int,
+                        help='# switches')
+    parser.add_argument('--bigraph-m', default=8, type=int,
+                        help='logical groups size (# sub-node per switch')
+    parser.add_argument('--bigraph-n', default=2, type=int,
                         help='# switches')
     parser.add_argument('--dgx2_k', default=1, type=int,
                         help='#network radix')
