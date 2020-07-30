@@ -297,6 +297,7 @@ class MultiTreeAllreduce(Allreduce):
                     if verbose:
                         print('    timestep {}: {}'.format(timestep, all_gather_schedule[node][timestep]))
                 else:
+                    self.all_gather_schedule[node].append(None)
                     if verbose:
                         print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
     # def generate_schedule(self, verbose=False)
