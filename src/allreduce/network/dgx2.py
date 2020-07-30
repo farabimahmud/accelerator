@@ -3,10 +3,10 @@ import numpy as np
 
 from network import Network
 
-class BiGraph(Network):
+class DGX2(Network):
     def __init__(self, args):
         super().__init__(args)
-        self.type = 'BiGraph'
+        self.type = 'DGX2'
         self.m = args.bigraph_m # No. sub-nodes per physical group
         self.n = args.bigraph_n # No. switches
         assert self.nodes == self.m * self.n
@@ -29,11 +29,25 @@ class BiGraph(Network):
         # upper and switch
         for sw in range(self.n // 2):
             for neighbor_sw in range(self.n // 2, self.n):
+              for i in range(self.m):
                 self.switch_to_switch[sw].append(neighbor_sw)
                 self.switch_to_switch[neighbor_sw].append(sw)
 
+        # adjacency list
+        for node in range(self.nodes):
+            self.from_nodes[node] = []
+            self.to_nodes[node] = []
+
+            neighbor_base = 0
+            if node < self.m:
+                neighbor_base = self.m
+            for n in range(self.m):
+                neighbor = n + neighbor_base
+                self.from_nodes[node].append(neighbor)
+                self.to_nodes[node].append(neighbor)
+
         if verbose:
-            print('BiGraph Topology:')
+            print('DGX2 Topology:')
             print('  - Node connections:')
             for node in range(self.nodes):
                 print('    node {} is connected to switch {}'.format(node, self.node_to_switch[node][0]))
@@ -42,10 +56,9 @@ class BiGraph(Network):
                 print('    switch {}:'.format(sw))
                 print('      connects to switches {}'.format(self.switch_to_switch[sw]))
                 print('      connects to nodes {}'.format(self.switch_to_node[sw]))
-
-        # ring for 32 nodes with m = 4 and n = 8
-        # [0, 16, 4, 20, 8, 24, 12, 28, 1, 21, 13, 17, 9, 29, 5, 25, 10, 22
-        #  6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15, 23, 3, 27]
+            print('  - From and To nodes:')
+            for node in range(self.nodes):
+                print('    node {}\'s from nodes {}'.format(node, self.from_nodes[node]))
     # def build_graph(self, filename=None)
 
 
@@ -56,16 +69,24 @@ class BiGraph(Network):
 def test():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--nodes', default=32, type=int,
-                        help='number of end nodes, default is 4')
-    parser.add_argument('--bigraph-m', default=4, type=int,
+    parser.add_argument('--dimension', default=1, type=int,
+                        help='network dimension, default is 1')
+    parser.add_argument('--dgx2_c', default=8, type=int,
                         help='logical groups size (# sub-node per switch')
-    parser.add_argument('--bigraph-n', default=8, type=int,
+    parser.add_argument('--dgx2_n', default=2, type=int,
                         help='# switches')
+    parser.add_argument('--bigraph-m', default=8, type=int,
+                        help='logical groups size (# sub-node per switch')
+    parser.add_argument('--bigraph-n', default=2, type=int,
+                        help='# switches')
+    parser.add_argument('--dgx2_k', default=1, type=int,
+                        help='#network radix')
+    parser.add_argument('--nodes', default=16, type=int,
+                        help='#nodes')
 
     args = parser.parse_args()
 
-    network = BiGraph(args)
+    network = DGX2(args)
     network.build_graph(verbose=True)
 
 

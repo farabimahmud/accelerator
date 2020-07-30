@@ -39,6 +39,7 @@ class Network(ABC):
 
 from kncube import KNCube
 from bigraph import BiGraph
+from dgx2 import DGX2
 
 
 '''
@@ -54,9 +55,11 @@ def construct_network(args):
     if args.booksim_network == 'mesh':
         network = KNCube(args, mesh=True)
     elif args.booksim_network == 'torus':
-        network = KNCube(args)
+      network = KNCube(args)
     elif args.booksim_network == 'bigraph':
         network = BiGraph(args)
+    elif args.booksim_network == 'dgx2':
+        network = DGX2(args)
     else:
         raise RuntimeError('Unknown network topology: ' + args.booksim_network)
 

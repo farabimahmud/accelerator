@@ -28,6 +28,13 @@ class RingAllreduce(Allreduce):
         # construct a ring
         explored = {}
         while True:
+            if self.network.type == 'BiGraph':
+                assert self.network.m == 4 and self.args.n == 8
+                self.ring = [0, 16, 4, 20, 8, 24, 12, 28, 1, 21, 13, 17, 9, 29,
+                        5, 25, 10, 22 6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15,
+                        23, 3, 27]
+                break
+
             # current node
             current = self.ring[-1]
 
@@ -188,8 +195,8 @@ def test(args):
     # network.to_nodes[1].clear() # test no solution case
 
     allreduce = RingAllreduce(args, network)
-    allreduce.compute_trees(verbose=False)
-    allreduce.generate_schedule(verbose=False)
+    allreduce.compute_trees(verbose=args.verbose)
+    allreduce.generate_schedule(verbose=args.verbose)
     allreduce.max_num_concurrent_flows()
     if args.gendotfile:
         allreduce.generate_ring_dotfile('ring.dot')
@@ -199,12 +206,20 @@ def test(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
+    parser.add_argument('--num-hmcs', default=16, type=int,
+                        help='number of nodes, default is 32')
     parser.add_argument('--dimension', default=4, type=int,
                         help='network dimension, default is 4')
+    parser.add_argument('--bigraph-m', default=8, type=int,
+                        help='logical groups size (# sub-node per switch')
+    parser.add_argument('--bigraph-n', default=2, type=int,
+                        help='# switches')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
+    parser.add_argument('--verbose', default=False, action='store_true',
+                        help='detailed print')
     parser.add_argument('--booksim-network', default='torus',
-                        help='network topology (torus | mesh), default is torus')
+                        help='network topology (torus | mesh | dgx2), default is torus')
 
     args = parser.parse_args()
 
