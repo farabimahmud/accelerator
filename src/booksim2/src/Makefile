@@ -26,7 +26,7 @@
 
 LEX = flex
 YACC   = bison -y
-DEFINE = -DTEST_SCALE_TRAFFICMANAGER
+DEFINE = -DTEST_SCALE_TRAFFICMANAGER -DDEBUG_BIGRAPH
 INCPATH = -I. -Iarbiters -Iallocators -Irouters -Inetworks -Ipower -Idsent
 CPPFLAGS += -Wall $(DEFINE)
 #CPPFLAGS += -O3
@@ -45,14 +45,14 @@ STATIC_LIB_BOOKSIM := libbooksim.a
 ########## DSENT ###########
 # Define the directories that will be compiled
 DSENT_DIRS_TO_COMPILE := util tech io \
-												 model model/timing_graph \
-												 model/std_cells \
-												 model/electrical \
-												 model/electrical/router \
-												 model/optical \
-												 model/optical_graph \
-												 model/network \
-												 model/network/ATAC
+				model model/timing_graph \
+				model/std_cells \
+				model/electrical \
+				model/electrical/router \
+				model/optical \
+				model/optical_graph \
+				model/network \
+				model/network/ATAC
 
 DSENT_DIRS = $(patsubst %,dsent/%,$(DSENT_DIRS_TO_COMPILE))
 DSENT_SRCS = $(foreach dir, $(DSENT_DIRS), $(wildcard $(dir)/*.cc))

@@ -157,10 +157,10 @@ void DGX2::_BuildNet( const Configuration& config )
         
         
         //setting the access latency 
-        _inject[link]->SetLatency( 1 );
-        _inject_cred[link]->SetLatency( 1 );
-        _eject[link]->SetLatency( 1 );
-        _eject_cred[link]->SetLatency( 1 );
+        _inject[link]->SetLatency( 150 );
+        _inject_cred[link]->SetLatency( 150 );
+        _eject[link]->SetLatency( 150 );
+        _eject_cred[link]->SetLatency( 150 );
       }
     }
   }
@@ -200,8 +200,8 @@ void DGX2::_BuildNet( const Configuration& config )
         _inputChannelMap[level *_k + pos][inport] = link;
         _input_port[level * _k + pos]++;
 
-        _chan[link]->SetLatency( 1 );
-        _chan_cred[link]->SetLatency( 1 ); 
+        _chan[link]->SetLatency( 150 );
+        _chan_cred[link]->SetLatency( 150 ); 
       }
     }
   }  

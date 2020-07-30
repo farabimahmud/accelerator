@@ -259,7 +259,7 @@ class MultiTreeAllreduce(Allreduce):
                 if root not in all_gather_schedule[ag_parent][ag_timestep].keys():
                     if ag_parent == root:
                         assert self.trees_parent[root][ag_parent] == None
-                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1, self.timesteps + 1)
+                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1, self.timesteps + ag_timestep + 1)
                     else:
                         all_gather_schedule[ag_parent][ag_timestep][root] = ([], (root, self.trees_parent[root][ag_parent]), 1, ag_timestep + self.timesteps + 1)
                 all_gather_schedule[ag_parent][ag_timestep][root][0].append((ag_child, all_gather_ni[ag_child][ag_timestep]))

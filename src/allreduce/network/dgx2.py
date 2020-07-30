@@ -71,9 +71,9 @@ def test():
 
     parser.add_argument('--dimension', default=1, type=int,
                         help='network dimension, default is 1')
-    parser.add_argument('--dgx2_c', default=8, type=int,
+    parser.add_argument('--dgx2-c', default=8, type=int,
                         help='logical groups size (# sub-node per switch')
-    parser.add_argument('--dgx2_n', default=2, type=int,
+    parser.add_argument('--dgx2-n', default=2, type=int,
                         help='# switches')
     parser.add_argument('--bigraph-m', default=8, type=int,
                         help='logical groups size (# sub-node per switch')

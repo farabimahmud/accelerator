@@ -168,7 +168,7 @@ class HDRMAllreduce(Allreduce):
                 print('')
 
         for rank in range(self.network.nodes):
-            self.reduce_scatter_schedule[self.rank_map[rank]].append({self.rank_map[rank]: ((None, None), child[rank], self.timesteps)})
+            self.reduce_scatter_schedule[self.rank_map[rank]].append({self.rank_map[rank]: ((None, None), child[rank], 0, self.timesteps)})
 
         if verbose:
             print('Recursive doubling all-gather:')

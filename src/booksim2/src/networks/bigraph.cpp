@@ -63,10 +63,10 @@ void BiGraph::_BuildNet(const Configuration &config)
         int link = id * _m + port;
         _routers[id]->AddInputChannel(_inject[link], _inject_cred[link]);
         _routers[id]->AddOutputChannel(_eject[link], _eject_cred[link]);
-        _inject[link]->SetLatency(1);
-        _inject_cred[link]->SetLatency(1);
-        _eject[link]->SetLatency(1);
-        _eject_cred[link]->SetLatency(1);
+        _inject[link]->SetLatency(150);
+        _inject_cred[link]->SetLatency(150);
+        _eject[link]->SetLatency(150);
+        _eject_cred[link]->SetLatency(150);
       }
 
       // connect output channels
@@ -90,7 +90,7 @@ void BiGraph::_BuildNet(const Configuration &config)
   }
 #ifdef DEBUG_BIGRAPH
   for (int i = 0; i < _size; i++) {
-    cout << _routers[i]->Name() << endl;
+    cout << _routers[i]->Name() << " (id " << _routers[i]->GetID() << ")" << endl;
     int num_ports = _routers[i]->NumInputs();
     assert(num_ports == _routers[i]->NumOutputs());
     for (int port = 0; port < num_ports; port++) {
@@ -98,9 +98,11 @@ void BiGraph::_BuildNet(const Configuration &config)
       assert(channel);
       const Router *router = channel->GetSink();
       if (router) {
-        cout << " to Router " << router->Name() << " from port " << port << " through link " << channel->Name() << endl;
+        cout << " to Router " << router->Name() << " (id " << router->GetID() << ") from port " << port << " through link " << channel->Name() << endl;
       } else {
-        cout << " to NI " << " from port " << port << " through link " << channel->Name() << endl;
+        int link = i * _m + port;
+        assert(_eject[link] == channel);
+        cout << " to NI " << link << " from port " << port << " through link " << channel->Name() << endl;
       }
     }
   }

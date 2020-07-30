@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+from copy import deepcopy
 
 sys.path.append('{}/src/allreduce/network'.format(os.environ['SIMHOME']))
 
@@ -29,10 +30,31 @@ class RingAllreduce(Allreduce):
         explored = {}
         while True:
             if self.network.type == 'BiGraph':
-                assert self.network.m == 4 and self.args.n == 8
+                assert self.network.m == 4 and self.network.n == 8
                 self.ring = [0, 16, 4, 20, 8, 24, 12, 28, 1, 21, 13, 17, 9, 29,
-                        5, 25, 10, 22 6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15,
+                        5, 25, 10, 22, 6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15,
                         23, 3, 27]
+
+                node_to_switch = deepcopy(self.network.node_to_switch)
+                switch_to_switch = deepcopy(self.network.switch_to_switch)
+                switch_to_node = deepcopy(self.network.switch_to_node)
+
+                # verify the ring with topology
+                current = 0
+                while current < self.network.nodes:
+                    current_node = self.ring[current]
+                    next_node = self.ring[(current + 1) % self.network.nodes]
+                    cur_sw = self.network.node_to_switch[current_node][0]
+                    node_to_switch[current_node] = None
+                    next_sw = self.network.node_to_switch[next_node][0]
+                    switch_to_switch[cur_sw].remove(next_sw)
+                    switch_to_node[next_sw].remove(next_node)
+                    current += 1
+
+                #print('node-to-switch: {}'.format(node_to_switch))
+                #print('switch-to-switch: {}'.format(switch_to_switch))
+                #print('switch-to-node: {}'.format(switch_to_node))
+
                 break
 
             # current node
@@ -190,7 +212,6 @@ class RingAllreduce(Allreduce):
 
 
 def test(args):
-    args.num_hmcs = int(args.dimension * args.dimension)
     network = construct_network(args)
     # network.to_nodes[1].clear() # test no solution case
 
@@ -207,13 +228,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--num-hmcs', default=16, type=int,
-                        help='number of nodes, default is 32')
-    parser.add_argument('--dimension', default=4, type=int,
-                        help='network dimension, default is 4')
+                        help='number of nodes, default is 16')
     parser.add_argument('--bigraph-m', default=8, type=int,
-                        help='logical groups size (# sub-node per switch')
+                        help='logical groups size (# sub-node per switch), default 8')
     parser.add_argument('--bigraph-n', default=2, type=int,
-                        help='# switches')
+                        help='# switches, default 2')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
     parser.add_argument('--verbose', default=False, action='store_true',

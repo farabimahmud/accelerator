@@ -432,7 +432,8 @@ void dgx2_nca( const Router *r, const Flit *f,
       cout<<"source: "<<src<<" dest: "<<dest<<" gK: "<<gK<<endl;
       assert(0 && "*** src and dest should belong to same physical channel ***");
     }
-    out_port = gC + RandomInt(gC-1); // Chose two ports out of the possible at random, compare loads, choose one.
+    //out_port = gC + RandomInt(gC-1); // Chose two ports out of the possible at random, compare loads, choose one.
+    out_port = gC + f->dest % gC;
   }  
   outputs->Clear( );
 
