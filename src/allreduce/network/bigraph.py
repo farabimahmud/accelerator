@@ -42,6 +42,10 @@ class BiGraph(Network):
                 print('    switch {}:'.format(sw))
                 print('      connects to switches {}'.format(self.switch_to_switch[sw]))
                 print('      connects to nodes {}'.format(self.switch_to_node[sw]))
+
+        # ring for 32 nodes with m = 4 and n = 8
+        # [0, 16, 4, 20, 8, 24, 12, 28, 1, 21, 13, 17, 9, 29, 5, 25, 10, 22
+        #  6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15, 23, 3, 27]
     # def build_graph(self, filename=None)
 
 
@@ -52,8 +56,8 @@ class BiGraph(Network):
 def test():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dimension', default=4, type=int,
-                        help='network dimension, default is 4')
+    parser.add_argument('--nodes', default=32, type=int,
+                        help='number of end nodes, default is 4')
     parser.add_argument('--bigraph-m', default=4, type=int,
                         help='logical groups size (# sub-node per switch')
     parser.add_argument('--bigraph-n', default=8, type=int,
