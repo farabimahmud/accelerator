@@ -1,0 +1,25 @@
+
+            D (GB)          
+Yaxis =   -----------       Gbps
+            T (secs)                
+
+2*(N-1)*D (DD): data sent (GB)
+T             : seconds to send abov (secs)
+
+We have comm. (comm.) that is cycles to send DD
+
+1 G cycles : 1 sec = comm. cycles : T secs
+
+T = comm. cycles / 1 G / seconds (seconds)
+
+Yaxis =  { (D *1024/ 1024) } / { comm. / (10^10)}
+
+N: 16
+D: 32kB
+T: 710702
+
+DD   =  (32kB / 1024 / 1024) (GB)
+---    ----------------------------------- 
+T    =        710702 / 1 * 10 ** 9 
+
+
