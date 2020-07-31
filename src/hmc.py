@@ -385,14 +385,16 @@ class HMC(SimObject):
         assert len(self.free_nis) > 0 or cur_cycle == self.estimated_next_steptime
         assert len(self.reduce_scatter_schedule) > 0
         assert len(self.just_allocated_nis) == 0
-        if self.new_step == True and self.args.strict_schedule and \
-                len(self.free_nis) != self.args.radix:
-            if self.args.estimate_lockstep and len(self.reduce_scatter_schedule) > 1:
-                if self.reduce_scatter_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
-                    self.reduce_scatter_schedule.pop(0)
-                    if self.reduce_scatter_schedule[0] == None:
-                        self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
-                        self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+        pop_none = False
+        if self.args.estimate_lockstep and len(self.reduce_scatter_schedule) > 1:
+            if self.reduce_scatter_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
+                self.reduce_scatter_schedule.pop(0)
+                pop_none = True
+                if self.reduce_scatter_schedule[0] == None:
+                    self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
+                    self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+        if (self.new_step == True and self.args.strict_schedule and \
+                len(self.free_nis) != self.args.radix) or pop_none:
             return
         self.new_step = False
         for ni in self.free_nis:
@@ -620,14 +622,18 @@ class HMC(SimObject):
         assert len(self.all_gather_schedule) > 0
         #assert len(self.free_nis) > 0 # FIXME: may fail due to oracle-lockstep
         assert len(self.just_allocated_nis) == 0
-        if self.new_step == True and self.args.strict_schedule and \
-                len(self.free_nis) != self.args.radix:
-            if self.args.estimate_lockstep and len(self.all_gather_schedule) > 1:
-                if self.all_gather_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
-                    self.all_gather_schedule.pop(0)
-                    if self.all_gather_schedule[0] == None:
-                        self.schedule('all-gather', cur_cycle + self.estimated_steptime)
-                        self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+        pop_none = False
+        if self.args.estimate_lockstep and len(self.all_gather_schedule) > 0:
+            if self.all_gather_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
+                self.all_gather_schedule.pop(0)
+                pop_none = True
+                logger.debug('{} | {} | pop None in all-gather-evaluate 1'.format(cur_cycle, self.name))
+                if len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] == None:
+                    self.schedule('all-gather', cur_cycle + self.estimated_steptime)
+                    self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+                    logger.debug('{} | {} | schedule event for next None all-gather (at cycle {}) 1'.format(cur_cycle, self.name, self.estimated_next_steptime))
+        if (self.new_step == True and self.args.strict_schedule and \
+                len(self.free_nis) != self.args.radix) or pop_none:
             return
         self.new_step = False
         for ni in self.free_nis:
@@ -640,16 +646,20 @@ class HMC(SimObject):
                 if self.args.estimate_lockstep:
                     if cur_cycle == self.estimated_next_steptime:
                         self.all_gather_schedule.pop(0)
+                        logger.debug('{} | {} | pop None in all-gather-evaluate 2'.format(cur_cycle, self.name))
                         if len(self.all_gather_schedule):
                             if self.all_gather_schedule[0] == None:
                                 self.schedule('all-gather', cur_cycle + self.estimated_steptime)
                                 self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+                                logger.debug('{} | {} | schedule event for next None all-gather (at cycle {}) 2'.format(cur_cycle, self.name, self.estimated_next_steptime))
                             else:
                                 if self.new_step == True and self.args.strict_schedule:
                                     if len*(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                                         self.schedule('all-gather', cur_cycle + 1)
+                                        logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 1)'.format(cur_cycle, self.name))
                                 elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
                                     self.schedule('all-gather', cur_cycle + 1)
+                                    logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 2)'.format(cur_cycle, self.name))
                     return
                 self.all_gather_schedule.pop(0)
             if len(self.all_gather_schedule) > 0:
@@ -681,12 +691,15 @@ class HMC(SimObject):
                         if self.all_gather_schedule[0] == None:
                             self.schedule('all-gather', cur_cycle + 2 * self.estimated_steptime)
                             self.estimated_next_steptime = cur_cycle + 2 * self.estimated_steptime
+                            logger.debug('{} | {} | schedule event for next None all-gather (at cycle {}) 3'.format(cur_cycle, self.name, self.estimated_next_steptime))
                         else:
                             if self.new_step == True and self.args.strict_schedule:
                                 if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                                     self.schedule('all-gather', cur_cycle + 1)
+                                    logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 3)'.format(cur_cycle, self.name))
                             elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
                                 self.schedule('all-gather', cur_cycle + 1)
+                                logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 4)'.format(cur_cycle, self.name))
                     break
             else:
                 break
