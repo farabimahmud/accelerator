@@ -919,8 +919,6 @@ class HMC(SimObject):
             return HMC.model_aggregation_cycles
 
         else:
-            # TODO: change me
-            return 1
             flow, child, num_sub_messages = self.pending_aggregations[0]
             data_size = num_sub_messages * self.sub_message_size // self.bytes_per_param  # NO. params
             if data_size not in HMC.allreduce_aggregation_cycles.keys():
