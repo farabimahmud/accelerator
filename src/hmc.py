@@ -120,16 +120,16 @@ class HMC(SimObject):
     def startup(self):
         # currently start from training
         self.communication_state = 'idle'
-        if self.args.only_compute:
-            self.computation_state = 'idle'
-            self.local_eventq.schedule('training', 0)
-        elif self.args.only_allreduce or self.args.only_reduce_scatter:
+        if self.args.only_allreduce or self.args.only_reduce_scatter:
             self.computation_state = 'aggregating'
             self.local_eventq.schedule('finish-aggregation', 0)
         elif self.args.only_all_gather:
             self.computation_state = 'idle'
             self.communication_state = 'all-gather'
             self.local_eventq.schedule('all-gather', 0)
+        else: # need to do training, including only-compute
+            self.computation_state = 'idle'
+            self.local_eventq.schedule('training', 0)
         self.global_eventq.schedule(self, 0)
     # end of startup()
 
