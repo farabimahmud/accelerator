@@ -160,6 +160,12 @@ public:
   virtual int dest(int source);
 };
 
+class DGX_rand : public DigitPermutationTrafficPattern {
+public:
+  DGX_rand(int nodes, int k, int n, int xr = 1);
+  virtual int dest(int source);
+};
+
 class HotSpotTrafficPattern : public TrafficPattern {
 private:
   vector<int> _hotspots;

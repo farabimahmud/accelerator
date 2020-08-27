@@ -49,6 +49,7 @@
 #include "tree4.hpp"
 #include "qtree.hpp"
 #include "cmesh.hpp"
+#include "dgx2.hpp"
 
 
 
@@ -396,6 +397,48 @@ void fattree_anca( const Router *r, const Flit *f,
 }
 
 
+void dgx2_nca( const Router *r, const Flit *f,
+               int in_channel, OutputSet* outputs, bool inject)
+{
+  int vcBegin = 0, vcEnd = gNumVCs-1;
+  if ( f->type == Flit::READ_REQUEST ) {
+    vcBegin = gReadReqBeginVC;
+    vcEnd = gReadReqEndVC;
+  } else if ( f->type == Flit::WRITE_REQUEST ) {
+    vcBegin = gWriteReqBeginVC;
+    vcEnd = gWriteReqEndVC;
+  } else if ( f->type ==  Flit::READ_REPLY ) {
+    vcBegin = gReadReplyBeginVC;
+    vcEnd = gReadReplyEndVC;
+  } else if ( f->type ==  Flit::WRITE_REPLY ) {
+    vcBegin = gWriteReplyBeginVC;
+    vcEnd = gWriteReplyEndVC;
+  }
+  assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
+
+  int out_port;
+  int router_num = f->dest % gK + ((f->dest>=(gK*gC))?gK:0);
+  if(inject) {
+    out_port = -1;
+  } 
+  else if(r->GetID() == router_num){
+    out_port = f->dest/gK - ((f->dest>=(gK*gC))?gC:0);
+  }
+  else
+  {
+    int dest = f->dest;
+    int src = f->src;
+    if(src % gK != dest % gK){
+      cout<<"source: "<<src<<" dest: "<<dest<<" gK: "<<gK<<endl;
+      assert(0 && "*** src and dest should belong to same physical channel ***");
+    }
+    //out_port = gC + RandomInt(gC-1); // Chose two ports out of the possible at random, compare loads, choose one.
+    out_port = gC + f->dest % gC;
+  }  
+  outputs->Clear( );
+
+  outputs->AddRange( out_port, vcBegin, vcEnd );
+}
 
 
 // ============================================================
@@ -2024,4 +2067,5 @@ void InitializeRoutingMap( const Configuration & config )
 
   gRoutingFunctionMap["chaos_mesh"]  = &chaos_mesh;
   gRoutingFunctionMap["chaos_torus"] = &chaos_torus;
+  gRoutingFunctionMap["nca_dgx2"] = &dgx2_nca;
 }

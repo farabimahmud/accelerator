@@ -65,7 +65,13 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
   vector<string> params = tokenize_str(param_str);
   
   TrafficPattern * result = NULL;
-  if(pattern_name == "bitcomp") {
+  if(pattern_name == "dgx2rand"){
+    int k = config->GetInt("k");
+    int n = config->GetInt("n");
+    int xr = config->GetInt("c");
+    result = new DGX_rand(nodes, k, n, xr);
+  }
+  else if(pattern_name == "bitcomp") {
     result = new BitCompTrafficPattern(nodes);
   } else if(pattern_name == "transpose") {
     result = new TransposeTrafficPattern(nodes);
@@ -196,6 +202,40 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
     exit(-1);
   }
   return result;
+}
+
+DGX_rand::DGX_rand(int nodes, int k, int n, int xr)
+: DigitPermutationTrafficPattern(nodes, k, n, xr)
+{
+
+}
+
+int DGX_rand::dest(int source){
+  assert((source >= 0) && (source < _nodes));
+  int upper = -1;
+  int lower = -1;
+  if(source < (_k * _xr)){
+    lower = _k * _xr;
+    upper = 2 * _k * _xr - 1;
+  }
+  else{
+    lower = 0;
+    upper = _k * _xr - 1;
+  }
+  int dest = rand() % (upper - lower + 1) + lower;
+  int src_sw = source % _k;
+  int dest_sw = dest % _k;
+  if(src_sw != dest_sw){
+    //cout<<"original dest: "<<dest<<endl;
+    if(dest_sw < src_sw){
+      dest = dest + (src_sw - dest_sw);
+    }
+    else{
+      dest = dest - (dest_sw - src_sw);
+    }
+  }
+  //cout<<"trafficpattern: source: "<<source<<" dest: "<<dest<<" _k: "<<_k<<endl; 
+  return dest;
 }
 
 PermutationTrafficPattern::PermutationTrafficPattern(int nodes)

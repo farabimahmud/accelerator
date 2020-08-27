@@ -49,6 +49,7 @@
 #include "dragonfly.hpp"
 #include "ckncube.hpp"
 #include "bigraph.hpp"
+#include "dgx2.hpp"
 
 
 Network::Network( const Configuration &config, const string & name ) :
@@ -121,7 +122,12 @@ Network * Network::New(const Configuration & config, const string & name)
   } else if (topo == "bigraph") {
     BiGraph::RegisterRoutingFunctions();
     n = new BiGraph(config, name);
-  } else {
+  } 
+  else if ( topo == "dgx2"){
+    DGX2::RegisterRoutingFunctions() ;
+    n = new DGX2(config, name);
+  } 
+  else {
     cerr << "Unknown topology: " << topo << endl;
   }
 

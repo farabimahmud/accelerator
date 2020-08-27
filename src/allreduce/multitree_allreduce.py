@@ -259,39 +259,15 @@ class MultiTreeAllreduce(Allreduce):
                 if root not in all_gather_schedule[ag_parent][ag_timestep].keys():
                     if ag_parent == root:
                         assert self.trees_parent[root][ag_parent] == None
-                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1, self.timesteps)
+                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], None, 1, self.timesteps + ag_timestep + 1)
                     else:
-                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], (root, self.trees_parent[root][ag_parent]), 1, ag_timestep + self.timesteps)
+                        all_gather_schedule[ag_parent][ag_timestep][root] = ([], (root, self.trees_parent[root][ag_parent]), 1, ag_timestep + self.timesteps + 1)
                 all_gather_schedule[ag_parent][ag_timestep][root][0].append((ag_child, all_gather_ni[ag_child][ag_timestep]))
                 all_gather_ni[ag_child][ag_timestep] = (all_gather_ni[ag_child][ag_timestep] + 1) % self.args.radix
 
         # initialize the schedules
         self.reduce_scatter_schedule = {}
         self.all_gather_schedule = {}
-
-        # TODO: for debugging, cleanup later
-        filename = 'reduce_scatter_schedule.csv'
-        with open(filename, 'w') as outfile:
-            string = 'timestep,'
-            for node in range(self.network.nodes):
-                string += 'NPU {},,,,'.format(node)
-            string += '\n'
-            outfile.write(string)
-
-            for timestep in range(self.timesteps):
-                string = '{},'.format(timestep)
-                for node in range(self.network.nodes):
-                    messages = 0
-                    if timestep in reduce_scatter_schedule[node].keys():
-                        for i, (subflow, schedule) in enumerate(reduce_scatter_schedule[node][timestep].items()):
-                            string += '{}-{},'.format(subflow, schedule[0][0])
-                            messages += 1
-                    for j in range(messages, 4):
-                        string += ','
-                string += '\n'
-                outfile.write(string)
-
-            outfile.close()
 
         for node in range(self.network.nodes):
             self.reduce_scatter_schedule[node] = []
@@ -321,10 +297,56 @@ class MultiTreeAllreduce(Allreduce):
                     if verbose:
                         print('    timestep {}: {}'.format(timestep, all_gather_schedule[node][timestep]))
                 else:
+                    self.all_gather_schedule[node].append(None)
                     if verbose:
                         print('    timestep {}: no scheduled communication in this timestep'.format(timestep))
-    # def generate_schedule(self, verbose=False)
 
+        if verbose:
+            print('\nSchedule Tables:')
+            for node in range(self.network.nodes):
+                print(' Accelerator {}:'.format(node))
+                for timestep in range(self.timesteps):
+                    if self.reduce_scatter_schedule[node][timestep] == None:
+                        print('   - NoOp')
+                    else:
+                        for flow, schedule in self.reduce_scatter_schedule[node][timestep].items():
+                            print('   - Reduce, FlowID {}, Parent {}, Children {}, Step {}'.format(flow, schedule[0][0], [ele[1] for ele in schedule[1]], timestep))
+
+                for timestep in range(self.timesteps):
+                    if self.all_gather_schedule[node][timestep] == None:
+                        print('   - NoOp')
+                    else:
+                        for flow, schedule in self.all_gather_schedule[node][timestep].items():
+                            if schedule[1] == None:
+                                parent = 'nil'
+                            else:
+                                parent = schedule[1][1]
+                            print('   - Gather, FlowID {}, Parent {}, Children {}, Step {}'.format(flow, parent, [ele[0] for ele in schedule[0]], self.timesteps + timestep))
+
+            print('\nAggregation Table:')
+            aggregation_table = {}
+            for node in range(self.network.nodes):
+                aggregation_table[node] = {}
+
+            for timestep in range(self.timesteps):
+                for node in range(self.network.nodes):
+                    if self.reduce_scatter_schedule[node][timestep] != None:
+                        for flow, schedule in self.reduce_scatter_schedule[node][timestep].items():
+                            parent = schedule[0][0]
+                            if timestep not in aggregation_table[parent].keys():
+                                aggregation_table[parent][timestep] = {flow: [node]}
+                            elif flow not in aggregation_table[parent][timestep]:
+                                aggregation_table[parent][timestep][flow] = [node]
+                            else:
+                                aggregation_table[parent][timestep][flow].append(node)
+
+            for node in range(self.network.nodes):
+                print(' Accelerator {}:'.format(node))
+                for timestep in sorted(aggregation_table[node].keys()):
+                    for flow, children in aggregation_table[node][timestep].items():
+                        print('   - FlowID {}, Children {}, Step {}'.format(flow, children, timestep))
+
+    # def generate_schedule(self, verbose=False)
 
 def test(args):
     network = construct_network(args)

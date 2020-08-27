@@ -120,16 +120,16 @@ class HMC(SimObject):
     def startup(self):
         # currently start from training
         self.communication_state = 'idle'
-        if self.args.only_compute:
-            self.computation_state = 'idle'
-            self.local_eventq.schedule('training', 0)
-        elif self.args.only_allreduce or self.args.only_reduce_scatter:
+        if self.args.only_allreduce or self.args.only_reduce_scatter:
             self.computation_state = 'aggregating'
             self.local_eventq.schedule('finish-aggregation', 0)
         elif self.args.only_all_gather:
             self.computation_state = 'idle'
             self.communication_state = 'all-gather'
             self.local_eventq.schedule('all-gather', 0)
+        else: # need to do training, including only-compute
+            self.computation_state = 'idle'
+            self.local_eventq.schedule('training', 0)
         self.global_eventq.schedule(self, 0)
     # end of startup()
 
@@ -142,7 +142,10 @@ class HMC(SimObject):
         if self.args.oracle_lockstep:
             if HMC.allreduce_timestep == None:
                 HMC.allreduce_timestep = 0
-                HMC.allreduce_remaining_for_timestep = [0] * allreduce.timesteps
+                HMC.allreduce_remaining_for_timestep = [0] * (allreduce.timesteps * 2 + 1)
+                if self.args.only_all_gather:
+                    HMC.allreduce_timestep = allreduce.timesteps + 1
+
         self.allreduce = allreduce
         self.reduce_scatter_schedule = deepcopy(allreduce.reduce_scatter_schedule[self.id])
         self.all_gather_schedule = deepcopy(allreduce.all_gather_schedule[self.id])
@@ -151,8 +154,14 @@ class HMC(SimObject):
                 if schedules == None:
                     continue
                 for fl, schedule in schedules.items():
-                    if schedule[2] != 0:
-                        HMC.allreduce_remaining_for_timestep[schedule[3]] += 1
+                    HMC.allreduce_remaining_for_timestep[schedule[3]] += 1
+            for i, schedules in enumerate(self.all_gather_schedule):
+                if schedules == None:
+                    continue
+                for fl, schedule in schedules.items():
+                    assert schedule[2] != 0
+                    HMC.allreduce_remaining_for_timestep[schedule[3]] += len(schedule[0])
+
         for root in range(self.args.num_hmcs):
             for child in allreduce.trees_children[root][self.id]:
                 self.messages_received['reduce-scatter'][root][child] = 0
@@ -334,8 +343,6 @@ class HMC(SimObject):
             if self.reduce_scatter_schedule[0] == None:
                 self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
                 self.estimated_next_steptime = cur_cycle + self.estimated_steptime
-                if self.id == 14:
-                    logger.info('{} | {} | 0 schedule for None next time {}'.format(cur_cycle, self.name, self.estimated_next_steptime))
             else:
                 self.schedule('reduce-scatter', cur_cycle + 1)
 
@@ -378,14 +385,16 @@ class HMC(SimObject):
         assert len(self.free_nis) > 0 or cur_cycle == self.estimated_next_steptime
         assert len(self.reduce_scatter_schedule) > 0
         assert len(self.just_allocated_nis) == 0
-        if self.new_step == True and self.args.strict_schedule and \
-                len(self.free_nis) != self.args.radix:
-            if self.args.estimate_lockstep and len(self.reduce_scatter_schedule) > 1:
-                if self.reduce_scatter_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
-                    self.reduce_scatter_schedule.pop(0)
-                    if self.reduce_scatter_schedule[0] == None:
-                        self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
-                        self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+        pop_none = False
+        if self.args.estimate_lockstep and len(self.reduce_scatter_schedule) > 1:
+            if self.reduce_scatter_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
+                self.reduce_scatter_schedule.pop(0)
+                pop_none = True
+                if self.reduce_scatter_schedule[0] == None:
+                    self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
+                    self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+        if (self.new_step == True and self.args.strict_schedule and \
+                len(self.free_nis) != self.args.radix) or pop_none:
             return
         self.new_step = False
         for ni in self.free_nis:
@@ -395,22 +404,22 @@ class HMC(SimObject):
             dest_ni = None
             num_data_copy = None
             timestep = None
-            if len(self.reduce_scatter_schedule) > 0:
-                while self.reduce_scatter_schedule[0] == None:
-                    if self.args.estimate_lockstep:
-                        if cur_cycle == self.estimated_next_steptime:
-                            self.reduce_scatter_schedule.pop(0)
-                            if self.reduce_scatter_schedule[0] == None:
-                                self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
-                                self.estimated_next_steptime = cur_cycle + self.estimated_steptime
-                            else:
-                                if self.new_step == True and self.args.strict_schedule:
-                                    if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
-                                        self.schedule('reduce-scatter', cur_cycle + 1)
-                                elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+            while len(self.reduce_scatter_schedule) > 0 and self.reduce_scatter_schedule[0] == None:
+                if self.args.estimate_lockstep:
+                    if cur_cycle == self.estimated_next_steptime:
+                        self.reduce_scatter_schedule.pop(0)
+                        if self.reduce_scatter_schedule[0] == None:
+                            self.schedule('reduce-scatter', cur_cycle + self.estimated_steptime)
+                            self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+                        else:
+                            if self.new_step == True and self.args.strict_schedule:
+                                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                                     self.schedule('reduce-scatter', cur_cycle + 1)
-                        return
-                    self.reduce_scatter_schedule.pop(0)
+                            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                self.schedule('reduce-scatter', cur_cycle + 1)
+                    return
+                self.reduce_scatter_schedule.pop(0)
+            if len(self.reduce_scatter_schedule) > 0:
                 for flow, schedule in self.reduce_scatter_schedule[0].items():
                     depending_children = schedule[1]
                     if len(depending_children) == 0:
@@ -424,7 +433,6 @@ class HMC(SimObject):
                 if self.args.oracle_lockstep:
                     if timestep != HMC.allreduce_timestep:
                         break
-                    assert timestep == HMC.allreduce_timestep
                 self.reduce_scatter_schedule[0].pop(send_flow)
                 if parent != None:
                     assert dest_ni != None
@@ -449,6 +457,14 @@ class HMC(SimObject):
                                     self.schedule('reduce-scatter', cur_cycle + 1)
                             elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
                                 self.schedule('reduce-scatter', cur_cycle + 1)
+                    break # finish one timestep, should retry later
+                if self.args.oracle_lockstep and len(self.reduce_scatter_schedule) == 0:
+                    HMC.allreduce_remaining_for_timestep[timestep] -= 1
+                    if HMC.allreduce_remaining_for_timestep[timestep] == 0:
+                        HMC.allreduce_timestep += 1
+                        for hmc in HMC.hmcs:
+                            if hmc.communication_state == 'all-gather':
+                                hmc.schedule('all-gather', cur_cycle + 1)
                     break # finish one timestep, should retry later
             else:
                 break
@@ -479,6 +495,20 @@ class HMC(SimObject):
             self.communication_state = 'all-gather'
             self.schedule('all-gather', cur_cycle + 1)
             logger.info('{} | {} | start all-gather (start in reduce-scatter)'.format(cur_cycle, self.name))
+        if len(self.reduce_scatter_schedule) > 0 and self.reduce_scatter_schedule[0] != None:
+            some_ready = False
+            for flow, schedule in self.reduce_scatter_schedule[0].items():
+                depending_children = schedule[1]
+                if len(depending_children) == 0:
+                    some_ready = True
+                    break
+            if self.new_step == True and self.args.strict_schedule and some_ready:
+                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                    self.schedule('reduce-scatter', cur_cycle + 1)
+                    logger.debug('{} | {} | schedule event for reduce-scatter (in reduce-scatter-update 1)'.format(cur_cycle, self.name))
+            elif len(self.free_nis) - len(self.just_allocated_nis) > 0 and some_ready:
+                self.schedule('reduce-scatter', cur_cycle + 1)
+                logger.debug('{} | {} | schedule event for reduce-scatter (in reduce-scatter-update 2)'.format(cur_cycle, self.name))
     # end of reduce_scatter_update()
 
 
@@ -550,31 +580,37 @@ class HMC(SimObject):
                 self.sending[ni] = None
                 self.free_nis.add(ni)
                 num_complete += 1
-        # TODO: figure out the following two cases
-        #   1. not sure why num_complete check make it worse, some discrepancy
-        #      in finish-aggregation for scheduling reduce-scatter and
-        #      incoming-message for scheduling all-gather;
-        #   2. strict-schedule also make it worse.
-        #if num_complete > 0 and len(self.reduce_scatter_schedule) > 0:
-        if len(self.reduce_scatter_schedule) > 0:
-            if self.new_step == True and self.args.strict_schedule:
-                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
-                    self.schedule('reduce-scatter', cur_cycle + 1)
-                    logger.debug('{} | {} | schedule event for reduce-scatter'.format(cur_cycle, self.name))
-            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
-                self.schedule('reduce-scatter', cur_cycle + 1)
-                logger.debug('{} | {} | schedule event for reduce-scatter'.format(cur_cycle, self.name))
-        #elif num_complete > 0 and len(self.reduce_scatter_schedule) == 0 and \
-        elif len(self.reduce_scatter_schedule) == 0 and \
-                len(self.free_nis) == self.args.radix and \
-                len(self.just_allocated_nis) == 0:
-            # finish all the reduce-scatter from this node before it starts all-gather
-            if self.args.only_reduce_scatter:
-                self.communication_state = 'idle'
-                return
-            self.communication_state = 'all-gather'
-            self.schedule('all-gather', cur_cycle + 1)
-            logger.info('{} | {} | start all-gather (start in send-reduce-message)'.format(cur_cycle, self.name))
+                # TODO: figure out the following two cases
+                #   1. not sure why num_complete check make it worse, some discrepancy
+                #      in finish-aggregation for scheduling reduce-scatter and
+                #      incoming-message for scheduling all-gather;
+                #   2. strict-schedule also make it worse.
+                #if num_complete > 0 and len(self.reduce_scatter_schedule) > 0:
+                if len(self.reduce_scatter_schedule) > 0 and self.reduce_scatter_schedule[0] != None:
+                    some_ready = False
+                    for flow, schedule in self.reduce_scatter_schedule[0].items():
+                        depending_children = schedule[1]
+                        if len(depending_children) == 0:
+                            some_ready = True
+                            break
+                    if self.new_step == True and self.args.strict_schedule and some_ready:
+                        if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                            self.schedule('reduce-scatter', cur_cycle + 1)
+                            logger.debug('{} | {} | schedule event for reduce-scatter (in send-reduce-message-update 1)'.format(cur_cycle, self.name))
+                    elif len(self.free_nis) - len(self.just_allocated_nis) > 0 and some_ready:
+                        self.schedule('reduce-scatter', cur_cycle + 1)
+                        logger.debug('{} | {} | schedule event for reduce-scatter (in send-reduce-message-update 2)'.format(cur_cycle, self.name))
+                #elif num_complete > 0 and len(self.reduce_scatter_schedule) == 0 and \
+                elif len(self.reduce_scatter_schedule) == 0 and \
+                        len(self.free_nis) == self.args.radix and \
+                        len(self.just_allocated_nis) == 0:
+                    # finish all the reduce-scatter from this node before it starts all-gather
+                    if self.args.only_reduce_scatter:
+                        self.communication_state = 'idle'
+                        return
+                    self.communication_state = 'all-gather'
+                    self.schedule('all-gather', cur_cycle + 1)
+                    logger.info('{} | {} | start all-gather (start in send-reduce-message)'.format(cur_cycle, self.name))
     # end of send_reduce_message_update()
 
 
@@ -584,10 +620,20 @@ class HMC(SimObject):
     def all_gather_evaluate(self, cur_cycle):
         assert self.communication_state == 'all-gather'
         assert len(self.all_gather_schedule) > 0
-        assert len(self.free_nis) > 0
+        #assert len(self.free_nis) > 0 # FIXME: may fail due to oracle-lockstep
         assert len(self.just_allocated_nis) == 0
-        if self.new_step == True and self.args.strict_schedule and \
-                len(self.free_nis) != self.args.radix:
+        pop_none = False
+        if self.args.estimate_lockstep and len(self.all_gather_schedule) > 0:
+            if self.all_gather_schedule[0] == None and cur_cycle == self.estimated_next_steptime:
+                self.all_gather_schedule.pop(0)
+                pop_none = True
+                logger.debug('{} | {} | pop None in all-gather-evaluate 1'.format(cur_cycle, self.name))
+                if len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] == None:
+                    self.schedule('all-gather', cur_cycle + self.estimated_steptime)
+                    self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+                    logger.debug('{} | {} | schedule event for next None all-gather (at cycle {}) 1'.format(cur_cycle, self.name, self.estimated_next_steptime))
+        if (self.new_step == True and self.args.strict_schedule and \
+                len(self.free_nis) != self.args.radix) or pop_none:
             return
         self.new_step = False
         for ni in self.free_nis:
@@ -596,6 +642,26 @@ class HMC(SimObject):
             send_flow = None
             num_data_copy = None
             timestep = None
+            while len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] == None:
+                if self.args.estimate_lockstep:
+                    if cur_cycle == self.estimated_next_steptime:
+                        self.all_gather_schedule.pop(0)
+                        logger.debug('{} | {} | pop None in all-gather-evaluate 2'.format(cur_cycle, self.name))
+                        if len(self.all_gather_schedule):
+                            if self.all_gather_schedule[0] == None:
+                                self.schedule('all-gather', cur_cycle + self.estimated_steptime)
+                                self.estimated_next_steptime = cur_cycle + self.estimated_steptime
+                                logger.debug('{} | {} | schedule event for next None all-gather (at cycle {}) 2'.format(cur_cycle, self.name, self.estimated_next_steptime))
+                            else:
+                                if self.new_step == True and self.args.strict_schedule:
+                                    if len*(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                        self.schedule('all-gather', cur_cycle + 1)
+                                        logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 1)'.format(cur_cycle, self.name))
+                                elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                    self.schedule('all-gather', cur_cycle + 1)
+                                    logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 2)'.format(cur_cycle, self.name))
+                    return
+                self.all_gather_schedule.pop(0)
             if len(self.all_gather_schedule) > 0:
                 for flow, schedule in self.all_gather_schedule[0].items():
                     depending_parent = schedule[1]
@@ -605,12 +671,10 @@ class HMC(SimObject):
                         timestep = schedule[3]
                         break
             if send_flow != None:
+                if self.args.oracle_lockstep:
+                    if timestep != HMC.allreduce_timestep:
+                        break
                 child, dest_ni = self.all_gather_schedule[0][send_flow][0].pop(0)
-                if len(self.all_gather_schedule[0][send_flow][0]) == 0:
-                    self.all_gather_schedule[0].pop(send_flow)
-                if len(self.all_gather_schedule[0]) == 0:
-                    self.all_gather_schedule.pop(0)
-                    self.new_step = True
                 self.just_allocated_nis[ni] = (send_flow, child, dest_ni, timestep)
                 if self.message_size == 0:
                     self.num_messages[ni] = 1
@@ -618,6 +682,25 @@ class HMC(SimObject):
                 else:
                     self.num_messages[ni] = self.base_num_messages * num_data_copy
                     self.num_sub_messages[ni] = self.base_num_sub_messages
+                if len(self.all_gather_schedule[0][send_flow][0]) == 0:
+                    self.all_gather_schedule[0].pop(send_flow)
+                if len(self.all_gather_schedule[0]) == 0:
+                    self.all_gather_schedule.pop(0)
+                    self.new_step = True
+                    if self.args.estimate_lockstep and len(self.all_gather_schedule) > 0:
+                        if self.all_gather_schedule[0] == None:
+                            self.schedule('all-gather', cur_cycle + 2 * self.estimated_steptime)
+                            self.estimated_next_steptime = cur_cycle + 2 * self.estimated_steptime
+                            logger.debug('{} | {} | schedule event for next None all-gather (at cycle {}) 3'.format(cur_cycle, self.name, self.estimated_next_steptime))
+                        else:
+                            if self.new_step == True and self.args.strict_schedule:
+                                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                    self.schedule('all-gather', cur_cycle + 1)
+                                    logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 3)'.format(cur_cycle, self.name))
+                            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                self.schedule('all-gather', cur_cycle + 1)
+                                logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 4)'.format(cur_cycle, self.name))
+                    break
             else:
                 break
     # end of all_gather_evaluate()
@@ -628,7 +711,7 @@ class HMC(SimObject):
     '''
     def all_gather_update(self, cur_cycle):
         assert self.communication_state == 'all-gather'
-        assert len(self.free_nis) > 0
+        #assert len(self.free_nis) > 0 # FIXME: may fail due to oracle-lockstep
         if len(self.just_allocated_nis) > 0:
             # allocate NIs
             for ni, new_flow in self.just_allocated_nis.items():
@@ -639,6 +722,20 @@ class HMC(SimObject):
             self.just_allocated_nis.clear()
             logger.debug('{} | {} | schedule send-gather-message for next cycle (new flow)'.format(cur_cycle, self.name))
             self.schedule('send-gather-message', cur_cycle + 1)
+        if len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] != None:
+            some_ready = False
+            for flow, schedule in self.all_gather_schedule[0].items():
+                depending_parent = schedule[1]
+                if depending_parent == None:
+                    some_ready = True
+                    break
+            if self.new_step == True and self.args.strict_schedule and some_ready:
+                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                    self.schedule('all-gather', cur_cycle + 1)
+                    logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-update 1)'.format(cur_cycle, self.name))
+            elif len(self.free_nis) - len(self.just_allocated_nis) > 0 and some_ready:
+                self.schedule('all-gather', cur_cycle + 1)
+                logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-update 2)'.format(cur_cycle, self.name))
     # end of all_gather_update()
 
 
@@ -694,6 +791,14 @@ class HMC(SimObject):
                 dest = sending[1]
                 dest_ni = sending[2]
                 timestep = sending[3]
+                if self.args.oracle_lockstep:
+                    HMC.allreduce_remaining_for_timestep[timestep] -= 1
+                    if HMC.allreduce_remaining_for_timestep[timestep] == 0:
+                        HMC.allreduce_timestep += 1
+                        for hmc in HMC.hmcs:
+                            assert hmc.communication_state == 'all-gather' or hmc.communication_state == 'idle'
+                            if hmc.communication_state == 'all-gather' and hmc.id != self.id:
+                                hmc.schedule('all-gather', cur_cycle + 1)
                 logger.info('{} | {} | finishes gather for flow {} (from NI {}) to child HMC-{} (to NI {}) at timestep {}'.format(cur_cycle, self.name, flow, ni, dest, dest_ni, timestep))
                 self.num_messages[ni] = None
                 self.num_sub_messages[ni] = None
@@ -701,21 +806,27 @@ class HMC(SimObject):
                 self.sending[ni] = None
                 self.free_nis.add(ni)
                 num_complete += 1
-        #if num_complete > 0 and len(self.all_gather_schedule) > 0:
-        if len(self.all_gather_schedule) > 0:
-            if self.new_step == True and self.args.strict_schedule:
-                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
-                    self.schedule('all-gather', cur_cycle + 1)
-                    logger.debug('{} | {} | schedule all-gather (more schedules to send in send-gather-message)'.format(cur_cycle, self.name))
-            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
-                self.schedule('all-gather', cur_cycle + 1)
-                logger.debug('{} | {} | schedule all-gather (more schedules to send in send-gather-message)'.format(cur_cycle, self.name))
-        #elif num_complete > 0 and len(self.all_gather_schedule) == 0 and \
-        elif len(self.all_gather_schedule) == 0 and \
-                len(self.free_nis) == self.args.radix and \
-                len(self.just_allocated_nis) == 0:
-            self.communication_state = 'idle'
-            logger.info('{} | {} | finishes all-gather (after send-gather-message)'.format(cur_cycle, self.name))
+                #if num_complete > 0 and len(self.all_gather_schedule) > 0:
+                if len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] != None:
+                    some_ready = False
+                    for flow, schedule in self.all_gather_schedule[0].items():
+                        depending_parent = schedule[1]
+                        if depending_parent == None:
+                            some_ready = True
+                            break
+                    if self.new_step == True and self.args.strict_schedule and some_ready:
+                        if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                            self.schedule('all-gather', cur_cycle + 1)
+                            logger.debug('{} | {} | schedule all-gather (more schedules to send in send-gather-message 1)'.format(cur_cycle, self.name))
+                    elif len(self.free_nis) - len(self.just_allocated_nis) > 0 and some_ready:
+                        self.schedule('all-gather', cur_cycle + 1)
+                        logger.debug('{} | {} | schedule all-gather (more schedules to send in send-gather-message 2)'.format(cur_cycle, self.name))
+                #elif num_complete > 0 and len(self.all_gather_schedule) == 0 and \
+                elif len(self.all_gather_schedule) == 0 and \
+                        len(self.free_nis) == self.args.radix and \
+                        len(self.just_allocated_nis) == 0:
+                    self.communication_state = 'idle'
+                    logger.info('{} | {} | finishes all-gather (after send-gather-message)'.format(cur_cycle, self.name))
     # end of send_gather_message_update()
 
 
@@ -768,19 +879,22 @@ class HMC(SimObject):
                     # clear all the dependencies
                     flow_parent = (flow, src)
                     for i, schedules in enumerate(self.all_gather_schedule):
+                        if schedules == None:
+                            continue
                         for fl, schedule in schedules.items():
                             if flow_parent == schedules[fl][1]: # from depending flow-parent
                                 children = self.all_gather_schedule[i][fl][0]
                                 num_data_copy = self.all_gather_schedule[i][fl][2]
-                                self.all_gather_schedule[i][fl] = (children, None, num_data_copy)
+                                timestep = self.all_gather_schedule[i][fl][3]
+                                self.all_gather_schedule[i][fl] = (children, None, num_data_copy, timestep)
                     if self.communication_state == 'all-gather':
                         if self.new_step == True and self.args.strict_schedule:
                             if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                                 self.schedule('all-gather', cur_cycle + 1)
-                                logger.debug('{} | {} | schedule all-gather (more schedules to send in incoming-message)'.format(cur_cycle, self.name))
+                                logger.debug('{} | {} | schedule all-gather (more schedules to send in incoming-message 1)'.format(cur_cycle, self.name))
                         elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
                             self.schedule('all-gather', cur_cycle + 1)
-                            logger.debug('{} | {} | schedule all-gather (more schedules to send in incoming-message)'.format(cur_cycle, self.name))
+                            logger.debug('{} | {} | schedule all-gather (more schedules to send in incoming-message 2)'.format(cur_cycle, self.name))
                 elif len(self.free_nis) == self.args.radix and \
                         len(self.just_allocated_nis) == 0:
                     self.communication_state = 'idle'
@@ -805,8 +919,6 @@ class HMC(SimObject):
             return HMC.model_aggregation_cycles
 
         else:
-            # TODO: change me
-            return 1
             flow, child, num_sub_messages = self.pending_aggregations[0]
             data_size = num_sub_messages * self.sub_message_size // self.bytes_per_param  # NO. params
             if data_size not in HMC.allreduce_aggregation_cycles.keys():

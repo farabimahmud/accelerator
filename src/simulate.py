@@ -118,9 +118,14 @@ def init():
         elif args.radix == 4 and args.message_size != 0:
             logfile = '{}/{}_{}_beta.log'.format(args.logdir, args.run_name, args.allreduce)
             jsonfile = '{}/{}_{}_beta.json'.format(args.logdir, args.run_name, args.allreduce)
-        elif args.radix == 4 and args.message_size == 0:
+        elif args.radix == 1 and args.message_size == 0:
             logfile = '{}/{}_{}_gamma.log'.format(args.logdir, args.run_name, args.allreduce)
             jsonfile = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+        elif args.radix == 4 and args.message_size == 0:
+            logfile = '{}/{}_{}_delta.log'.format(args.logdir, args.run_name, args.allreduce)
+            jsonfile = '{}/{}_{}_delta.json'.format(args.logdir, args.run_name, args.allreduce)
+        else:
+            raise RuntimeError('Error: Unknown configurations radix {} and message-size'.format(args.radix, args.message_size))
     else:
         if args.message_size == 0:
             logfile = '{}/{}_{}_gamma.log'.format(args.logdir, args.run_name, args.allreduce)
@@ -353,8 +358,12 @@ def main():
             jsonpath = '{}/{}_{}_alpha.json'.format(args.logdir, args.run_name, args.allreduce)
         elif args.radix == 4 and args.message_size != 0:
             jsonpath = '{}/{}_{}_beta.json'.format(args.logdir, args.run_name, args.allreduce)
-        elif args.radix == 4 and args.message_size == 0:
+        elif args.radix == 1 and args.message_size == 0:
             jsonpath = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
+        elif args.radix == 4 and args.message_size == 0:
+            jsonpath = '{}/{}_{}_delta.json'.format(args.logdir, args.run_name, args.allreduce)
+        else:
+            raise RuntimeError('Error: Unknown configurations radix {} and message-size'.format(args.radix, args.message_size))
     else:
         if args.message_size == 0:
             jsonpath = '{}/{}_{}_gamma.json'.format(args.logdir, args.run_name, args.allreduce)
