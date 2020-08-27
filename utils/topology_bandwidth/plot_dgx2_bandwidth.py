@@ -16,11 +16,14 @@ def nested_dict(n, type):
 
 def main(folder_path):
     # ring, multitree-alph, multitree-beta, multitree-gamma, hdm
-    schemes = ['Ring', 'MultiTree-$\\alpha$', 'MultiTree-$\\gamma$', 'Hdrm']
-    names = ['ring', 'multitree_alpha', 'multitree_gamma', 'hdrm']
+    schemes = ['Ring', 'MultiTree-$\\alpha$', 'MultiTree-$\\gamma$']
+    names = ['ring', 'multitree_alpha', 'multitree_gamma']
 
-    node = 32
+    node = 16
     ldata = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
+    #xlabels = ['32', '', '', '256', '', '', '2,048', '', '', '16,384', '', '']
+    xlabels = ['', '64', '', '', '512', '', '', '4,096', '', '', '32,768', '']
+    xlabels = ['', '64KB', '', '', '512KB', '', '', '4MB', '', '', '32MB', '']
     elements = [4]
     #elements = [4, 6]
 
@@ -47,7 +50,7 @@ def main(folder_path):
                 print (filename)
                 with open(filename, 'r') as json_file:
                     sim = json.load(json_file)
-                    comm_cycles[name][element][data] = sim['results']['performance']['allreduce']['communication']
+                    comm_cycles[name][element][data] = float(sim['results']['performance']['allreduce']['communication'])
 
     for s, name in enumerate(names):
         if name not in gbps.keys():
@@ -59,7 +62,7 @@ def main(folder_path):
 
             for d, data in enumerate(ldata):
                 #gbps[name][element].append( (2*(node-1)*(data/(1024*1024))) / (comm_cycles[name][element][data] / (10 ** 9) ))
-                gbps[name][element].append( ((data/(1024*1024))) / (comm_cycles[name][element][data] / (10 ** 9) ))
+                gbps[name][element].append( ((float(data)/(1024*1024))) / (comm_cycles[name][element][data] / (10 ** 9) ))
 
     for s, scheme in enumerate(names):
         for e, element in enumerate(elements):
@@ -79,8 +82,8 @@ def main(folder_path):
     linestyles = ['-', '-', '-', '-', '-', '-', '-']
     markers = ['o', '^', 's', 's', 's', 's']
 
-    figname = './plot_bigraph_bandwidth.pdf'
-    pdfpage, fig = pdf.plot_setup(figname, figsize=(8, 5), fontsize=22, font=('family', 'Tw Cen MT'))
+    figname = './dgx2_bandwidth.pdf'
+    pdfpage, fig = pdf.plot_setup(figname, figsize=(8, 6), fontsize=22, font=('family', 'Tw Cen MT'))
     ax = fig.gca()
     for s, scheme in enumerate(names):
         for e, element in enumerate(elements):
@@ -94,27 +97,30 @@ def main(folder_path):
                     color=colors[s],
                     linestyle=linestyles[s],
                     linewidth=3,
-                    label=scheme+str(element)
+                    label=schemes[s],
                     )
             ax.set_xticks(range(len(ldata)))
-            ax.set_xticklabels(ldata)
+            #ax.set_xticklabels(['{:,}'.format(int(x)) for x in ldata],
+            #        rotation = 45, ha="right",)
+            ax.set_xticklabels(xlabels)
             #ax.set_xlim(0, 270)
-            #ax.set_ylim(0, 18)
-            ax.set_xlabel('Data Size')
-            ax.set_ylabel('GBps')
+            ax.set_ylim(0, 10)
+            ax.set_xlabel('All-Reduce Data Size')
+            ax.set_ylabel('Bandwidth (GB/s)')
             ax.yaxis.grid(True, linestyle='--', color='black')
             hdls, lab = ax.get_legend_handles_labels()
-            ax.legend(
+            legend = ax.legend(
                     hdls,
                     lab,
-                    loc='upper center',
-                    bbox_to_anchor=(0.5, 1.25),
-                    ncol=3,
-                    frameon=False,
+                    loc='lower right',
+                    ncol=1,
+                    frameon=True,
                     handletextpad=0.6,
                     columnspacing=1
                     )
-            fig.subplots_adjust(top=0.8, bottom=0.2)
+            legend.get_frame().set_edgecolor('white')
+            #fig.subplots_adjust(top=0.8, bottom=0.2)
+            fig.subplots_adjust(top=0.95, bottom=0.15)
     pdf.plot_teardown(pdfpage, fig)
 
     plt.show()
