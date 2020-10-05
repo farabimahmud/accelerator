@@ -381,23 +381,30 @@ class DTreeAllreduce(Allreduce):
 
 
 def test(args):
-    args.num_hmcs = int(args.dimension * args.dimension)
     network = construct_network(args)
 
     allreduce = DTreeAllreduce(args, network)
-    allreduce.compute_trees(verbose=False)
-    allreduce.generate_schedule(verbose=False)
+    allreduce.compute_trees(verbose=args.verbose)
+    allreduce.generate_schedule(verbose=args.verbose)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dimension', default=4, type=int,
-                        help='network dimension, default is 4')
+    parser.add_argument('--num-hmcs', default=16, type=int,
+                        help='number of nodes, default is 16')
+    parser.add_argument('--kary', default=2, type=int,
+                        help='generay kary tree, default is 2 (binary)')
+    parser.add_argument('--bigraph-m', default=8, type=int,
+                        help='logical groups size (# sub-node per switch')
+    parser.add_argument('--bigraph-n', default=2, type=int,
+                        help='# switches')
+    parser.add_argument('--verbose', default=False, action='store_true',
+                        help='detailed print')
     parser.add_argument('--gendotfile', default=False, action='store_true',
                         help='generate tree dotfiles, default is False')
     parser.add_argument('--booksim-network', default='torus',
-                        help='network topology (torus | mesh), default is torus')
+                        help='network topology (torus | mesh | dgx2), default is torus')
 
     args = parser.parse_args()
 
