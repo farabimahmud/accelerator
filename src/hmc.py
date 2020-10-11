@@ -350,20 +350,26 @@ class HMC(SimObject):
             # clear dependency
             flow, child, _ = self.pending_aggregations.pop(0)
             logger.info('{} | {} | clear pending aggregation for flow {} from child HMC-{}'.format(cur_cycle, self.name, flow, child))
-            level = None
-            # clear dependency
+
             if len(self.reduce_scatter_schedule) > 0:
                 flow_child = (flow, child)
-                dependent_flow = None
+
                 for i, schedules in enumerate(self.reduce_scatter_schedule):
+                    level = None
+                    dependent_flow = None
+
                     if schedules == None:
                         continue
+
                     for fl, schedule in schedules.items():
                         if flow_child in schedule[1]:
                             level = i
                             dependent_flow = fl
                             break
-                self.reduce_scatter_schedule[level][dependent_flow][1].remove(flow_child)
+
+                    if level != None:
+                        self.reduce_scatter_schedule[level][dependent_flow][1].remove(flow_child)
+
                 if self.new_step == True and self.args.strict_schedule:
                     if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                         self.schedule('reduce-scatter', cur_cycle + 1)
@@ -452,6 +458,15 @@ class HMC(SimObject):
                             self.schedule('reduce-scatter', cur_cycle + 2 * self.estimated_steptime)
                             self.estimated_next_steptime = cur_cycle + 2 * self.estimated_steptime
                         else:
+                            if self.new_step == True and self.args.strict_schedule:
+                                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                    self.schedule('reduce-scatter', cur_cycle + 1)
+                            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                self.schedule('reduce-scatter', cur_cycle + 1)
+                    elif not self.args.estimate_lockstep:
+                        while len(self.reduce_scatter_schedule) > 0 and self.reduce_scatter_schedule[0] == None:
+                            self.reduce_scatter_schedule.pop(0)
+                        if len(self.reduce_scatter_schedule) > 0:
                             if self.new_step == True and self.args.strict_schedule:
                                 if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                                     self.schedule('reduce-scatter', cur_cycle + 1)
@@ -700,6 +715,15 @@ class HMC(SimObject):
                             elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
                                 self.schedule('all-gather', cur_cycle + 1)
                                 logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 4)'.format(cur_cycle, self.name))
+                    elif not self.args.estimate_lockstep:
+                        while len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] == None:
+                            self.all_gather_schedule.pop(0)
+                        if len(self.reduce_scatter_schedule) > 0:
+                            if self.new_step == True and self.args.strict_schedule:
+                                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                    self.schedule('reduce-scatter', cur_cycle + 1)
+                            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                self.schedule('reduce-scatter', cur_cycle + 1)
                     break
             else:
                 break

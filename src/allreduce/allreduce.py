@@ -15,7 +15,7 @@ class Allreduce(ABC):
         schedules are organized as list of list, the list with lower index
         in the schedule should be scheduled earlier.
         - reduce_scatter_schedule:
-            subflow: ((parent, dest_ni), [dependent flow-children (flow, child)], number of base data copy, timestep) // subflow is 'tree' root
+            subflow: ((parent, dest_ni), [dependent flow-children (flow, child)], number of base data copy, timestep) // (subflow is 'tree' root in multitree)
         - all_gather_schedule:
             subflow: ([(child1, dest_ni1), ..., (child_n, dest_ni_n)], dependent flow-parent (flow, parent), number of base data copy, timestep)
         Note: for scatter-reduce and all-gather, all send only one data copy, only depends on same flow
@@ -52,8 +52,8 @@ class Allreduce(ABC):
                 1        1 2         0 3           3 0           2 1
                 0           3           2             1             0
             reduce_scatter_schedule[0] = [
-                {3: ((1, 0), [], 1, 0)}                            # step 1
-                {1: ((1, 1), [], 1, 1), 2: ((2, 0), [(2, 1)], 1, 1)}  # step 2
+                {3: ((1, 0), [], 1, 0)}                                 # step 1
+                {1: ((1, 1), [], 1, 1), 2: ((2, 0), [(2, 1)], 1, 1)}    # step 2
                 {0: ((None, None), [(0, 2), (0, 1)], 1, 2)}
             ]
             all_gather_schedule[0] = [
@@ -61,6 +61,7 @@ class Allreduce(ABC):
                 {2: ([(1, 0)], (2, 2), 1, 4)}          # step 2
             ]
         HDRM:
+        Double Binary-Tree:
         '''
         self.reduce_scatter_schedule = None
         self.all_gather_schedule = None
