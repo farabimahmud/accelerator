@@ -7,6 +7,7 @@ class Allreduce(ABC):
     def __init__(self, args, network):
         self.args = args
         self.network = network
+        self.num_flows = self.network.nodes # default number of flows
         self.trees = None
         self.trees_parent = None
         self.trees_children = None
@@ -65,6 +66,10 @@ class Allreduce(ABC):
         '''
         self.reduce_scatter_schedule = None
         self.all_gather_schedule = None
+
+        # TODO: reduce-scatter and all-gather schedulues are merged into a unified
+        # schedule, opcodes: {'Reduce', 'Gather', 'NOP'}
+        self.collective_schedule = None
 
 
     '''
@@ -288,6 +293,7 @@ from dtree_allreduce import DTreeAllreduce
 from multitree_allreduce import MultiTreeAllreduce
 from mxnettree_allreduce import MXNetTreeAllreduce
 from hdrm_allreduce import HDRMAllreduce
+from ring2d_allreduce import Ring2DAllreduce
 
 
 '''
@@ -310,6 +316,8 @@ def construct_allreduce(args):
         allreduce = DTreeAllreduce(args, network)
     elif args.allreduce == 'hdrm':
         allreduce = HDRMAllreduce(args, network)
+    elif args.allreduce == 'ring2d':
+        allreduce = Ring2DAllreduce(args, network)
     else:
         raise RuntimeError('Unknow allreduce schedule: ' + args.allreduce)
 
