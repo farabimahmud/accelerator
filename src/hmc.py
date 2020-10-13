@@ -73,12 +73,6 @@ class HMC(SimObject):
         self.free_nis = set([i for i in range(self.args.radix)])
         self.just_allocated_nis = {}
         self.pending_aggregations = []
-        # the local accelerator can only control what to send but not what to receive
-        self.messages_sent = [0] * self.args.radix
-        self.messages_received = {'reduce-scatter': [{} for i in range(self.args.num_hmcs)],
-                                  'all-gather': [0] * self.args.num_hmcs}
-        self.messages_received_end = {'reduce-scatter': [{} for i in range(self.args.num_hmcs)],
-                                      'all-gather': [False] * self.args.num_hmcs}
         self.total_messages_sent = 0
 
 
@@ -162,10 +156,17 @@ class HMC(SimObject):
                     assert schedule[2] != 0
                     HMC.allreduce_remaining_for_timestep[schedule[3]] += len(schedule[0])
 
-        for root in range(self.args.num_hmcs):
-            for child in allreduce.trees_children[root][self.id]:
-                self.messages_received['reduce-scatter'][root][child] = 0
-                self.messages_received_end['reduce-scatter'][root][child] = False
+        # the local accelerator can only control what to send but not what to receive
+        self.messages_sent = [0] * self.args.radix
+        self.messages_received = {'reduce-scatter': [{} for i in range(self.allreduce.num_flows)],
+                                  'all-gather': [0] * self.allreduce.num_flows}
+        self.messages_received_end = {'reduce-scatter': [{} for i in range(self.allreduce.num_flows)],
+                                      'all-gather': [False] * self.allreduce.num_flows}
+
+        for flow in range(self.allreduce.num_flows):
+            for child in allreduce.trees_children[flow][self.id]:
+                self.messages_received['reduce-scatter'][flow][child] = 0
+                self.messages_received_end['reduce-scatter'][flow][child] = False
     # end of set_allreduce()
 
 
@@ -881,7 +882,7 @@ class HMC(SimObject):
     incoming_message_update() - check states and try to schedule event to select remaining communications
     '''
     def incoming_message_update(self, cur_cycle):
-        for flow in range(self.args.num_hmcs):
+        for flow in range(self.allreduce.num_flows):
             # handle reduce-scatter
             for src, messages_received_end in self.messages_received_end['reduce-scatter'][flow].items():
                 if messages_received_end:
