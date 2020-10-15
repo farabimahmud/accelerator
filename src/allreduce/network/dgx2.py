@@ -62,8 +62,17 @@ class DGX2(Network):
     # def build_graph(self, filename=None)
 
 
+    '''
+    distance() - distance between two nodes
+    @src: source node ID
+    @dest: destination node ID
+    '''
     def distance(self, src, dest):
-        pass
+        if src // 8 == dest // 8:
+            return 1
+        else:
+            return 2
+    # end of distance()
 
 
 def test():

@@ -73,12 +73,6 @@ class HMC(SimObject):
         self.free_nis = set([i for i in range(self.args.radix)])
         self.just_allocated_nis = {}
         self.pending_aggregations = []
-        # the local accelerator can only control what to send but not what to receive
-        self.messages_sent = [0] * self.args.radix
-        self.messages_received = {'reduce-scatter': [{} for i in range(self.args.num_hmcs)],
-                                  'all-gather': [0] * self.args.num_hmcs}
-        self.messages_received_end = {'reduce-scatter': [{} for i in range(self.args.num_hmcs)],
-                                      'all-gather': [False] * self.args.num_hmcs}
         self.total_messages_sent = 0
 
 
@@ -162,10 +156,17 @@ class HMC(SimObject):
                     assert schedule[2] != 0
                     HMC.allreduce_remaining_for_timestep[schedule[3]] += len(schedule[0])
 
-        for root in range(self.args.num_hmcs):
-            for child in allreduce.trees_children[root][self.id]:
-                self.messages_received['reduce-scatter'][root][child] = 0
-                self.messages_received_end['reduce-scatter'][root][child] = False
+        # the local accelerator can only control what to send but not what to receive
+        self.messages_sent = [0] * self.args.radix
+        self.messages_received = {'reduce-scatter': [{} for i in range(self.allreduce.num_flows)],
+                                  'all-gather': [0] * self.allreduce.num_flows}
+        self.messages_received_end = {'reduce-scatter': [{} for i in range(self.allreduce.num_flows)],
+                                      'all-gather': [False] * self.allreduce.num_flows}
+
+        for flow in range(self.allreduce.num_flows):
+            for child in allreduce.trees_children[flow][self.id]:
+                self.messages_received['reduce-scatter'][flow][child] = 0
+                self.messages_received_end['reduce-scatter'][flow][child] = False
     # end of set_allreduce()
 
 
@@ -350,20 +351,26 @@ class HMC(SimObject):
             # clear dependency
             flow, child, _ = self.pending_aggregations.pop(0)
             logger.info('{} | {} | clear pending aggregation for flow {} from child HMC-{}'.format(cur_cycle, self.name, flow, child))
-            level = None
-            # clear dependency
+
             if len(self.reduce_scatter_schedule) > 0:
                 flow_child = (flow, child)
-                dependent_flow = None
+
                 for i, schedules in enumerate(self.reduce_scatter_schedule):
+                    level = None
+                    dependent_flow = None
+
                     if schedules == None:
                         continue
+
                     for fl, schedule in schedules.items():
                         if flow_child in schedule[1]:
                             level = i
                             dependent_flow = fl
                             break
-                self.reduce_scatter_schedule[level][dependent_flow][1].remove(flow_child)
+
+                    if level != None:
+                        self.reduce_scatter_schedule[level][dependent_flow][1].remove(flow_child)
+
                 if self.new_step == True and self.args.strict_schedule:
                     if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                         self.schedule('reduce-scatter', cur_cycle + 1)
@@ -452,6 +459,15 @@ class HMC(SimObject):
                             self.schedule('reduce-scatter', cur_cycle + 2 * self.estimated_steptime)
                             self.estimated_next_steptime = cur_cycle + 2 * self.estimated_steptime
                         else:
+                            if self.new_step == True and self.args.strict_schedule:
+                                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                    self.schedule('reduce-scatter', cur_cycle + 1)
+                            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                self.schedule('reduce-scatter', cur_cycle + 1)
+                    elif not self.args.estimate_lockstep:
+                        while len(self.reduce_scatter_schedule) > 0 and self.reduce_scatter_schedule[0] == None:
+                            self.reduce_scatter_schedule.pop(0)
+                        if len(self.reduce_scatter_schedule) > 0:
                             if self.new_step == True and self.args.strict_schedule:
                                 if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
                                     self.schedule('reduce-scatter', cur_cycle + 1)
@@ -700,6 +716,15 @@ class HMC(SimObject):
                             elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
                                 self.schedule('all-gather', cur_cycle + 1)
                                 logger.debug('{} | {} | schedule all-gather (more schedules to send in all-gather-evaluate 4)'.format(cur_cycle, self.name))
+                    elif not self.args.estimate_lockstep:
+                        while len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] == None:
+                            self.all_gather_schedule.pop(0)
+                        if len(self.reduce_scatter_schedule) > 0:
+                            if self.new_step == True and self.args.strict_schedule:
+                                if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
+                                    self.schedule('reduce-scatter', cur_cycle + 1)
+                            elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
+                                self.schedule('reduce-scatter', cur_cycle + 1)
                     break
             else:
                 break
@@ -857,7 +882,7 @@ class HMC(SimObject):
     incoming_message_update() - check states and try to schedule event to select remaining communications
     '''
     def incoming_message_update(self, cur_cycle):
-        for flow in range(self.args.num_hmcs):
+        for flow in range(self.allreduce.num_flows):
             # handle reduce-scatter
             for src, messages_received_end in self.messages_received_end['reduce-scatter'][flow].items():
                 if messages_received_end:

@@ -7,6 +7,7 @@ class Allreduce(ABC):
     def __init__(self, args, network):
         self.args = args
         self.network = network
+        self.num_flows = self.network.nodes # default number of flows
         self.trees = None
         self.trees_parent = None
         self.trees_children = None
@@ -15,7 +16,7 @@ class Allreduce(ABC):
         schedules are organized as list of list, the list with lower index
         in the schedule should be scheduled earlier.
         - reduce_scatter_schedule:
-            subflow: ((parent, dest_ni), [dependent flow-children (flow, child)], number of base data copy, timestep) // subflow is 'tree' root
+            subflow: ((parent, dest_ni), [dependent flow-children (flow, child)], number of base data copy, timestep) // (subflow is 'tree' root in multitree)
         - all_gather_schedule:
             subflow: ([(child1, dest_ni1), ..., (child_n, dest_ni_n)], dependent flow-parent (flow, parent), number of base data copy, timestep)
         Note: for scatter-reduce and all-gather, all send only one data copy, only depends on same flow
@@ -52,8 +53,8 @@ class Allreduce(ABC):
                 1        1 2         0 3           3 0           2 1
                 0           3           2             1             0
             reduce_scatter_schedule[0] = [
-                {3: ((1, 0), [], 1, 0)}                            # step 1
-                {1: ((1, 1), [], 1, 1), 2: ((2, 0), [(2, 1)], 1, 1)}  # step 2
+                {3: ((1, 0), [], 1, 0)}                                 # step 1
+                {1: ((1, 1), [], 1, 1), 2: ((2, 0), [(2, 1)], 1, 1)}    # step 2
                 {0: ((None, None), [(0, 2), (0, 1)], 1, 2)}
             ]
             all_gather_schedule[0] = [
@@ -61,9 +62,14 @@ class Allreduce(ABC):
                 {2: ([(1, 0)], (2, 2), 1, 4)}          # step 2
             ]
         HDRM:
+        Double Binary-Tree:
         '''
         self.reduce_scatter_schedule = None
         self.all_gather_schedule = None
+
+        # TODO: reduce-scatter and all-gather schedulues are merged into a unified
+        # schedule, opcodes: {'Reduce', 'Gather', 'NOP'}
+        self.collective_schedule = None
 
 
     '''
@@ -287,6 +293,7 @@ from dtree_allreduce import DTreeAllreduce
 from multitree_allreduce import MultiTreeAllreduce
 from mxnettree_allreduce import MXNetTreeAllreduce
 from hdrm_allreduce import HDRMAllreduce
+from ring2d_allreduce import Ring2DAllreduce
 
 
 '''
@@ -309,6 +316,8 @@ def construct_allreduce(args):
         allreduce = DTreeAllreduce(args, network)
     elif args.allreduce == 'hdrm':
         allreduce = HDRMAllreduce(args, network)
+    elif args.allreduce == 'ring2d':
+        allreduce = Ring2DAllreduce(args, network)
     else:
         raise RuntimeError('Unknow allreduce schedule: ' + args.allreduce)
 

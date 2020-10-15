@@ -49,8 +49,21 @@ class BiGraph(Network):
     # def build_graph(self, filename=None)
 
 
+    '''
+    distance() - distance between two nodes in switch hops
+    @src: source node ID
+    @dest: destination node ID
+    '''
     def distance(self, src, dest):
-        pass
+        src_sw = self.node_to_switch[src][0]
+        dest_sw = self.node_to_switch[dest][0]
+        if src_sw == dest_sw:
+            return 1
+        elif src_sw in self.switch_to_switch[dest_sw]:
+            return 2
+        else:
+            return 3
+    # end of distance()
 
 
 def test():

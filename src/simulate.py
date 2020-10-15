@@ -59,7 +59,7 @@ def init():
     parser.add_argument('--dump', default=False, action='store_true',
                         help='dump memory traces, default=False')
     parser.add_argument('--allreduce', default='multitree',
-                        help='allreduce shedule (multitree|mxnettree|ring|dtree|hdrm), default=multitree')
+                        help='allreduce shedule (multitree|mxnettree|ring|dtree|hdrm|ring2d), default=multitree')
     parser.add_argument('-k', '--kary', default=2, type=int,
                         help='generay kary allreduce trees, default is 2 (binary)')
     parser.add_argument('--radix', default=4, type=int,
@@ -281,6 +281,13 @@ def main():
     allreduce_cycles = cycles - compute_cycles
     pure_communication_cycles = allreduce_cycles - allreduce_compute_cycles
 
+    # TODO: workaround to reduce simulation time for one-shot training,
+    #       need to change for layer-wise training
+    if args.allreduce == 'ring2d':
+        cycles *= 2
+        allreduce_cycles *= 2
+        pure_communication_cycles *= 2
+
     compute_percentile = compute_cycles / cycles * 100
     allreduce_percentile = allreduce_cycles / cycles * 100
     allreduce_compute_percentile = allreduce_compute_cycles / cycles * 100
@@ -338,6 +345,11 @@ def main():
     link_dyn_power = network.booksim.GetLinkDynPower()
     link_leak_power = network.booksim.GetLinkLeakPower()
     net_link_activities = network.booksim.GetNetLinkActivities()
+    # TODO: workaround to reduce simulation time for one-shot training
+    #       need to change for layer-wise training
+    if args.allreduce == 'ring2d':
+        net_link_activities *= 2
+
     sim['results']['power'] = {}
     sim['results']['power']['network'] = {}
     sim['results']['power']['network']['dynamic'] = net_dyn_power
