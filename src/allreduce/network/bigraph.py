@@ -46,6 +46,30 @@ class BiGraph(Network):
         # ring for 32 nodes with m = 4 and n = 8
         # [0, 16, 4, 20, 8, 24, 12, 28, 1, 21, 13, 17, 9, 29, 5, 25, 10, 22
         #  6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15, 23, 3, 27]
+        if self.m == 4 and self.n == 8:
+            self.ring = [0, 16, 4, 20, 8, 24, 12, 28, 1, 21, 13, 17, 9, 29,
+                    5, 25, 10, 22, 6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15,
+                    23, 3, 27]
+
+            node_to_switch = deepcopy(self.node_to_switch)
+            switch_to_switch = deepcopy(self.switch_to_switch)
+            switch_to_node = deepcopy(self.switch_to_node)
+
+            # verify the ring with topology
+            current = 0
+            while current < self.nodes:
+                current_node = self.ring[current]
+                next_node = self.ring[(current + 1) % self.nodes]
+                cur_sw = self.node_to_switch[current_node][0]
+                node_to_switch[current_node] = None
+                next_sw = self.node_to_switch[next_node][0]
+                switch_to_switch[cur_sw].remove(next_sw)
+                switch_to_node[next_sw].remove(next_node)
+                current += 1
+
+            #print('node-to-switch: {}'.format(node_to_switch))
+            #print('switch-to-switch: {}'.format(switch_to_switch))
+            #print('switch-to-node: {}'.format(switch_to_node))
     # def build_graph(self, filename=None)
 
 

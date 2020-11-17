@@ -30,6 +30,24 @@ class KNCube(Network):
     @filename: filename to generate topology dotfile, optional
     '''
     def build_graph(self, filename=None):
+        # construct ring
+        self.ring = []
+        for node in range(self.dimension):
+            self.ring.append(node)
+
+        prev_node = self.ring[-1]
+        while len(self.ring) != self.nodes:
+            if prev_node % 2 == 1:
+                node = prev_node + self.dimension
+                if node >= self.nodes:
+                    node = prev_node - 1
+            else:
+                node = prev_node - self.dimension
+                if node < self.dimension:
+                    node = prev_node - 1
+            self.ring.append(node)
+            prev_node = node
+        print('ring: {}'.format(self.ring))
 
         link_weight = 2
 
@@ -196,16 +214,16 @@ class KNCube(Network):
 
 
 def test():
-    dimension = 4
-    nodes = dimension * dimension
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dimension', default=4, type=int,
-                        help='network dimension, default is 4')
+    parser.add_argument('--nodes', default=16, type=int,
+                        help='network nodes, default is 16')
     parser.add_argument('--filename', default=None,
                         help='File name for topology dotfile, default None (no dotfile)')
     parser.add_argument('--mesh', default=False, action='store_true',
                         help='Create mesh network, default False (torus)')
+    parser.add_argument('--kary', default=5, type=int,
+                        help='generay kary tree, default is 2 (binary)')
 
     args = parser.parse_args()
 

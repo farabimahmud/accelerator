@@ -23,70 +23,46 @@ class RingAllreduce(Allreduce):
     @verbose: print detailed info of ring construction process
     '''
     def compute_trees(self, kary=None, alternate=True, sort=False, verbose=False):
-        # initialize empty a ring
-        self.ring.append(0)
+        if self.network.ring:
+            self.ring = deepcopy(self.network.ring)
 
-        # construct a ring
-        explored = {}
-        while True:
-            if self.network.type == 'BiGraph':
-                assert self.network.m == 4 and self.network.n == 8
-                self.ring = [0, 16, 4, 20, 8, 24, 12, 28, 1, 21, 13, 17, 9, 29,
-                        5, 25, 10, 22, 6, 18, 2, 30, 14, 26, 7, 31, 11, 19, 15,
-                        23, 3, 27]
+        else:
+            # initialize empty a ring
+            self.ring.append(0)
 
-                node_to_switch = deepcopy(self.network.node_to_switch)
-                switch_to_switch = deepcopy(self.network.switch_to_switch)
-                switch_to_node = deepcopy(self.network.switch_to_node)
+            # construct a ring
+            explored = {}
+            while True:
+                # current node
+                current = self.ring[-1]
 
-                # verify the ring with topology
-                current = 0
-                while current < self.network.nodes:
-                    current_node = self.ring[current]
-                    next_node = self.ring[(current + 1) % self.network.nodes]
-                    cur_sw = self.network.node_to_switch[current_node][0]
-                    node_to_switch[current_node] = None
-                    next_sw = self.network.node_to_switch[next_node][0]
-                    switch_to_switch[cur_sw].remove(next_sw)
-                    switch_to_node[next_sw].remove(next_node)
-                    current += 1
+                if current not in explored.keys():
+                    explored[current] = []
 
-                #print('node-to-switch: {}'.format(node_to_switch))
-                #print('switch-to-switch: {}'.format(switch_to_switch))
-                #print('switch-to-node: {}'.format(switch_to_node))
-
-                break
-
-            # current node
-            current = self.ring[-1]
-
-            if current not in explored.keys():
-                explored[current] = []
-
-            next_node = None
-            for neightbor in self.network.to_nodes[current]:
-                if neightbor not in self.ring and neightbor not in explored[current]:
-                    next_node = neightbor
-                    break
-
-            found = True
-            if next_node:
-                self.ring.append(next_node)
-                explored[current].append(next_node)
-                if len(self.ring) == self.network.nodes:
-                    if self.ring[0] in self.network.to_nodes[next_node]:
+                next_node = None
+                for neightbor in self.network.to_nodes[current]:
+                    if neightbor not in self.ring and neightbor not in explored[current]:
+                        next_node = neightbor
                         break
-                    else:
-                        # doesn't lead to a valid solution, not circle
-                        self.ring.pop()
-            else:
-                if verbose:
-                    print('Cannot reach a solution from current state: {}, backtrack'.format(self.ring))
-                # remove the current node since it cannot reach to a solution
-                self.ring.pop()
-                explored.pop(current)
-                if not explored:
-                    break
+
+                found = True
+                if next_node:
+                    self.ring.append(next_node)
+                    explored[current].append(next_node)
+                    if len(self.ring) == self.network.nodes:
+                        if self.ring[0] in self.network.to_nodes[next_node]:
+                            break
+                        else:
+                            # doesn't lead to a valid solution, not circle
+                            self.ring.pop()
+                else:
+                    if verbose:
+                        print('Cannot reach a solution from current state: {}, backtrack'.format(self.ring))
+                    # remove the current node since it cannot reach to a solution
+                    self.ring.pop()
+                    explored.pop(current)
+                    if not explored:
+                        break
 
         if len(self.ring) == self.network.nodes:
             self.timesteps = self.network.nodes - 1

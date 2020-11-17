@@ -16,6 +16,7 @@ class Network(ABC):
         self.switch_to_switch = {}
         self.switch_to_node = {}
         self.priority = [0] * self.nodes # used for allocation sequence
+        self.ring = None
 
 
     '''
