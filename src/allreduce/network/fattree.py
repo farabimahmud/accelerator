@@ -25,16 +25,16 @@ class FatTree(Network):
                 self.ring.append(i + j * self.m)
 
         for sw in range(self.num_switches):
-            self.switch_to_node[sw] = []
             self.switch_to_switch[sw] = []
 
         num_pos = self.m ** (self.n - 1)
 
         # connecting nodes to leaf switches
         for pos in range(num_pos):
+            sw = (self.n - 1) * (self.m ** (self.n - 1)) + pos
+            self.switch_to_node[sw] = []
             for i in range(self.m):
                 node = pos * self.m + i
-                sw = (self.n - 1) * (self.m ** (self.n - 1)) + pos
                 self.switch_to_node[sw].append(node)
                 self.node_to_switch[node] = (sw, 1)
 
@@ -113,7 +113,9 @@ class FatTree(Network):
             for sw in range(self.num_switches):
                 print('    switch {}:'.format(sw))
                 print('      connects to switches {}'.format(self.switch_to_switch[sw]))
-                print('      connects to nodes {}'.format(self.switch_to_node[sw]))
+                if sw in self.switch_to_node.keys():
+                    print('      connects to nodes {}'.format(self.switch_to_node[sw]))
+            print('  - Ring: {}'.format(self.ring))
     # def build_graph(self, filename=None)
 
 
