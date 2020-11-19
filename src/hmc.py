@@ -719,12 +719,12 @@ class HMC(SimObject):
                     elif not self.args.estimate_lockstep:
                         while len(self.all_gather_schedule) > 0 and self.all_gather_schedule[0] == None:
                             self.all_gather_schedule.pop(0)
-                        if len(self.reduce_scatter_schedule) > 0:
+                        if len(self.all_gather_schedule) > 0:
                             if self.new_step == True and self.args.strict_schedule:
                                 if len(self.free_nis) == self.args.radix and len(self.just_allocated_nis) == 0:
-                                    self.schedule('reduce-scatter', cur_cycle + 1)
+                                    self.schedule('all-gather', cur_cycle + 1)
                             elif len(self.free_nis) - len(self.just_allocated_nis) > 0:
-                                self.schedule('reduce-scatter', cur_cycle + 1)
+                                self.schedule('all-gather', cur_cycle + 1)
                     break
             else:
                 break
@@ -735,7 +735,8 @@ class HMC(SimObject):
     all_gather_update() - schedule selected communications
     '''
     def all_gather_update(self, cur_cycle):
-        assert self.communication_state == 'all-gather'
+        # incoming_message_update may be evaluated earilier, and set communication_state to idle
+        assert len(self.all_gather_schedule) == 0 or self.communication_state == 'all-gather'
         #assert len(self.free_nis) > 0 # FIXME: may fail due to oracle-lockstep
         if len(self.just_allocated_nis) > 0:
             # allocate NIs
