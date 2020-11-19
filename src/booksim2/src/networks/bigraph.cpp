@@ -70,8 +70,8 @@ void BiGraph::_BuildNet(const Configuration &config)
       }
 
       // connect output channels
-      for (int port = 0; port < _n / 2; port++) {
-        int link = id * _m + port;
+      for (int port = 0; port < routers_per_part; port++) {
+        int link = id * routers_per_part + port;
         _routers[id]->AddOutputChannel(_chan[link], _chan_cred[link]);
         _chan[link]->SetLatency(150);
         _chan_cred[link]->SetLatency(150);
@@ -80,8 +80,8 @@ void BiGraph::_BuildNet(const Configuration &config)
 
       // connect input channels
       int part_link_base = (part == 0 ? _channels / 2 : 0);
-      for (int port = 0; port < _n / 2; port++) {
-        int link = part_link_base + pos + port * _m;
+      for (int port = 0; port < routers_per_part; port++) {
+        int link = part_link_base + pos + port * routers_per_part;
         _routers[id]->AddInputChannel(_chan[link], _chan_cred[link]);
       }
 
