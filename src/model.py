@@ -49,6 +49,8 @@ class Model:
 
             self.num_layers += 1
             layer_size = int(elems[3]) * int(elems[4]) * int(elems[5]) * int(elems[6])
+            self.layers[self.num_layers]['size'] = layer_size
+
             self.size += layer_size
 
         logger.info('Model loading finished\n')
