@@ -88,8 +88,8 @@ class MultiTreeAllreduce(Allreduce):
                                         if node_to_switch[parent][1] == 0:
                                             node_to_switch.pop(parent, None)
                                         switch_to_node[switch].remove(child)
-                                        if not switch_to_node[switch]:
-                                            switch_to_node.pop(switch, None)
+                                        #if not switch_to_node[switch]:
+                                        #    switch_to_node.pop(switch, None)
                                         tree_nodes[root].append(child)
                                         self.trees[root].append((child, parent, self.timesteps))
                                         if verbose:
@@ -127,8 +127,8 @@ class MultiTreeAllreduce(Allreduce):
                                                     if node_to_switch[parent][1] == 0:
                                                         node_to_switch.pop(parent, None)
                                                     switch_to_node[neighbor_sw].remove(child)
-                                                    if not switch_to_node[neighbor_sw]:
-                                                        switch_to_node.pop(neighbor_sw, None)
+                                                    #if not switch_to_node[neighbor_sw]:
+                                                    #    switch_to_node.pop(neighbor_sw, None)
                                                     # remove connections between switches
                                                     for i in range(len(visited) - 1):
                                                         switch_to_switch[visited[i]].remove(visited[i+1])
