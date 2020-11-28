@@ -88,8 +88,8 @@ class MultiTreeAllreduce(Allreduce):
                                         if node_to_switch[parent][1] == 0:
                                             node_to_switch.pop(parent, None)
                                         switch_to_node[switch].remove(child)
-                                        if not switch_to_node[switch]:
-                                            switch_to_node.pop(switch, None)
+                                        #if not switch_to_node[switch]:
+                                        #    switch_to_node.pop(switch, None)
                                         tree_nodes[root].append(child)
                                         self.trees[root].append((child, parent, self.timesteps))
                                         if verbose:
@@ -99,35 +99,62 @@ class MultiTreeAllreduce(Allreduce):
                                         break
                                     else:
                                         conflicts[root] += 1
-                            # check one hop distant nodes
+
+                            # check remote switchs' nodes
                             if changed == False:
-                                neighbor_switches = deepcopy(switch_to_switch[switch])
-                                for neighbor_sw in neighbor_switches:
-                                    if neighbor_sw in switch_to_node.keys():
-                                        children = deepcopy(switch_to_node[neighbor_sw])
-                                        for child in children:
-                                            if child not in tree_nodes[root]:
-                                                if verbose:
-                                                    print(' -- add node {} ( with switch {}) to tree {} (connected to parent {} on neighbor switch {})'.format(child, neighbor_sw, root, parent, switch))
-                                                    print('    before: {}'.format(self.trees[root]))
-                                                node_to_switch[parent] = (switch, node_to_switch[parent][1] - 1)
-                                                if node_to_switch[parent][1] == 0:
-                                                    node_to_switch.pop(parent, None)
-                                                switch_to_node[neighbor_sw].remove(child)
-                                                if not switch_to_node[neighbor_sw]:
-                                                    switch_to_node.pop(neighbor_sw, None)
-                                                switch_to_switch[switch].remove(neighbor_sw)
-                                                tree_nodes[root].append(child)
-                                                self.trees[root].append((child, parent, self.timesteps))
-                                                if verbose:
-                                                    print('    after : {}'.format(self.trees[root]))
-                                                    print('    tree nodes: {}'.format(tree_nodes[root]))
-                                                changed = True
+                                dfs_switch_to_switch = deepcopy(switch_to_switch)
+                                visited = [switch]
+
+                                # perform depth-first search to find a node
+                                while visited and not changed:
+                                    switch = visited[-1]
+                                    neighbor_switches = deepcopy(dfs_switch_to_switch[switch])
+                                    for neighbor_sw in neighbor_switches:
+                                        if neighbor_sw in visited:
+                                            dfs_switch_to_switch[switch].remove(neighbor_sw)
+                                            continue
+                                        if neighbor_sw not in switch_to_node.keys(): # spine switch, not leaf
+                                            visited.append(neighbor_sw)
+                                            break
+                                        else:
+                                            children = deepcopy(switch_to_node[neighbor_sw])
+                                            for child in children:
+                                                if child not in tree_nodes[root]:
+                                                    if verbose:
+                                                        print(' -- add node {} ( with switch {}) to tree {} (connected to parent {} on neighbor switch {})'.format(child, neighbor_sw, root, parent, switch))
+                                                        print('    before: {}'.format(self.trees[root]))
+                                                    node_to_switch[parent] = (switch, node_to_switch[parent][1] - 1)
+                                                    if node_to_switch[parent][1] == 0:
+                                                        node_to_switch.pop(parent, None)
+                                                    switch_to_node[neighbor_sw].remove(child)
+                                                    #if not switch_to_node[neighbor_sw]:
+                                                    #    switch_to_node.pop(neighbor_sw, None)
+                                                    # remove connections between switches
+                                                    for i in range(len(visited) - 1):
+                                                        switch_to_switch[visited[i]].remove(visited[i+1])
+                                                    switch_to_switch[visited[-1]].remove(neighbor_sw)
+                                                    tree_nodes[root].append(child)
+                                                    self.trees[root].append((child, parent, self.timesteps))
+                                                    if verbose:
+                                                        print('    after : {}'.format(self.trees[root]))
+                                                        print('    tree nodes: {}'.format(tree_nodes[root]))
+                                                    changed = True
+                                                    break
+                                                else:
+                                                    conflicts[root] += 1
+                                            if changed:
                                                 break
-                                            else:
-                                                conflicts[root] += 1
+
+                                        # a node has been found and added
                                         if changed:
                                             break
+                                        elif switch == visited[-1]:
+                                            # no nodes associated with this leaf switch can be connected
+                                            dfs_switch_to_switch[switch].remove(neighbor_sw)
+
+                                    if not changed and switch == visited[-1]:
+                                        visited.pop()
+
                             if changed:
                                 break
 
@@ -365,7 +392,7 @@ def test(args):
         #allreduce.generate_per_tree_dotfile('multitreedot')
     sort_timesteps = allreduce.timesteps
     allreduce.generate_schedule()
-    allreduce.max_num_concurrent_flows()
+    #allreduce.max_num_concurrent_flows()
     if timesteps > sort_timesteps:
         compare = 'Better'
     elif timesteps == sort_timesteps:

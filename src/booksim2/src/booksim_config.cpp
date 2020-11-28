@@ -60,6 +60,9 @@ BookSimConfig::BookSimConfig( )
   //simulator tries to correclty adjust latency for node/router placement
   _int_map["use_noc_latency"] = 1;
 
+  // network interface (NI) link and network link latency
+  _int_map["ni_link_latency"] = 1;
+  _int_map["network_link_latency"] = 1;
 
   //used for noc latency calcualtion for network with concentration
   _int_map["x"] = 8; //number of routers in X
@@ -285,7 +288,7 @@ BookSimConfig::BookSimConfig( )
 
   _int_map["print_csv_results"] = 0;
 
-  _int_map["deadlock_warn_timeout"] = 256;
+  _int_map["deadlock_warn_timeout"] = 2560;
 
   _int_map["viewer_trace"] = 0;
 

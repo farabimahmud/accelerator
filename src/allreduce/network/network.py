@@ -16,6 +16,7 @@ class Network(ABC):
         self.switch_to_switch = {}
         self.switch_to_node = {}
         self.priority = [0] * self.nodes # used for allocation sequence
+        self.ring = None
 
 
     '''
@@ -40,6 +41,7 @@ class Network(ABC):
 from kncube import KNCube
 from bigraph import BiGraph
 from dgx2 import DGX2
+from fattree import FatTree
 
 
 '''
@@ -60,6 +62,8 @@ def construct_network(args):
         network = BiGraph(args)
     elif args.booksim_network == 'dgx2':
         network = DGX2(args)
+    elif args.booksim_network == 'fattree':
+        network = FatTree(args)
     else:
         raise RuntimeError('Unknown network topology: ' + args.booksim_network)
 
