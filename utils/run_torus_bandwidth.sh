@@ -21,7 +21,10 @@ do
 
     outdir=$SIMHOME/results/isca2021/bandwidth/${booksim_net}${scale}_logs
 
-    rm -rf $outdir
+    if [ -d $outdir ]; then
+      count=`ls -d $outdir* | wc -l`
+      outdir=$outdir-$count
+    fi
     mkdir -p $outdir
 
     for datasize in 32 64 128 256 512 1024 2048 4096 8192 16384 32768 65536

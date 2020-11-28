@@ -1,23 +1,24 @@
 #!/bin/sh
 
-booksim_net=mesh
+booksim_net=bigraph
 
-nodes_array=(16 64)
-scale_array=("4x4" "8x8")
-allreduces=(ring dtree ring2d multitree multitree multitree)
-names=(ring dtree ring2d multitree_alpha multitree_beta multitree_delta)
-booksim_configs_first=(mesh mesh cmesh mesh cmesh cmesh)
-booksim_configs_second=(express express multitree express multitree multitree)
+nodes_array=(64)
+scale_array=("4x16")
+#allreduces=(ring dtree hdrm multitree multitree)
+#names=(ring dtree hdrm multitree_alpha multitree_gamma)
+allreduces=(multitree multitree)
+names=(multitree_alpha multitree_gamma)
+booksim_configs=bigraph
+bigraph_options=("--bigraph-m 4 --bigraph-n 16")
 baseline_options="--kary 2 --radix 1 --message-size 256"
-ring2d_options="--kary 5 --radix 4 --message-size 256"
 multitree_alpha_options="--kary 2 --radix 1 --message-size 256 --strict-schedule --prioritize-schedule --estimate-lockstep"
-multitree_beta_options="--kary 5 --radix 4 --message-size 256 --strict-schedule --prioritize-schedule --estimate-lockstep"
-multitree_delta_options="--kary 5 --radix 4 --message-size 0 --strict-schedule --prioritize-schedule --estimate-lockstep"
+multitree_gamma_options="--kary 2 --radix 1 --message-size 0 --strict-schedule --prioritize-schedule --estimate-lockstep"
 
 for i in ${!nodes_array[@]};
 do
     nodes=${nodes_array[$i]}
     scale=${scale_array[$i]}
+    bigraph_option=${bigraph_options[$i]}
 
     outdir=$SIMHOME/results/isca2021/bandwidth/${booksim_net}${scale}_logs
 
@@ -27,32 +28,25 @@ do
     fi
     mkdir -p $outdir
 
-    for datasize in 32 64 128 256 512 1024 2048 4096 8192 16384 32768 65536
+    #for datasize in 32 64 128 256 512 1024 2048 4096 8192 16384 32768 65536
+    for datasize in 8192 16384 32768 65536
     do
         for s in ${!names[@]};
         do
             name=${names[$s]}
             allreduce=${allreduces[$s]}
-            booksim_config=$SIMHOME/src/booksim2/runfiles/${booksim_configs_first[$s]}${scale}${booksim_configs_second[$s]}.cfg
+            booksim_config=$SIMHOME/src/booksim2/runfiles/${booksim_configs}${scale}.cfg
             case ${name} in
-                ring|dtree)
+                ring|dtree|hdrm)
                     options=${baseline_options}
-                    ;;
-
-                ring2d)
-                    options=${ring2d_options}
                     ;;
 
                 multitree_alpha)
                     options=${multitree_alpha_options}
                     ;;
 
-                multitree_beta)
-                    options=${multitree_beta_options}
-                    ;;
-
-                multitree_delta)
-                    options=${multitree_delta_options}
+                multitree_gamma)
+                    options=${multitree_gamma_options}
                     ;;
 
                 *)
@@ -65,7 +59,6 @@ do
                 count=`ps aux | grep "only-allreduce" | wc -l`
                 while [ $count -ge 40 ]; do
                     count=`ps aux | grep "only-allreduce" | wc -l`
-                    sleep 1m
                 done
                 num_elements=$((($datasize*1024)/$element_size))
 
@@ -79,6 +72,7 @@ do
                 --allreduce ${allreduce}
                 --outdir $outdir
                 --booksim-network ${booksim_net}
+                ${bigraph_option}
                 --message-buffer-size 32
                 --sub-message-size 256
                 --only-allreduce
@@ -95,6 +89,7 @@ do
                 --allreduce ${allreduce} \
                 --outdir $outdir \
                 --booksim-network ${booksim_net} \
+                ${bigraph_option} \
                 --message-buffer-size 32 \
                 --sub-message-size 256 \
                 --only-allreduce \
